@@ -1,0 +1,18 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: R
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Antony
+    family-names: Attia
+    email: attiaa@stanford.edu
+    name-particle: Antony
+    orcid: 'https://orcid.org/0009-0003-0705-3076'
+    affiliation: Stanford
+repository-code: >-
+  https://github.com/AntonyAttia/liver_allocation_sequence_analysis_50_AOOS
