@@ -1,0 +1,3147 @@
+---
+title: "Figures and Supplement: When offers descend: pathway, timing, and outcomes in liver transplantations"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document:
+    code_folding: hide
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 8,
+  dpi = 300
+)
+```
+
+```{r load-packages, include=FALSE}
+library(tidyverse)
+library(here)
+library(DiagrammeR)
+library(rsvg)
+library(DiagrammeRsvg)
+library(glue)
+library(gt)
+library(gtsummary)
+library(patchwork)
+library(scales)
+library(webshot2)
+library(survival)
+library(survminer)
+library(broom)
+library(survRM2)
+library(nnet)
+library(flextable)
+
+```
+
+```{r load-data, include=FALSE}
+load(here("data_processed", "03_cohort_with_variables.rda"))
+counts <- readRDS(here("data_processed", "02_cohort_counts.rds"))
+```
+
+```{r global-theme, include=FALSE}
+# Set global theme for all plots
+theme_set(theme_minimal(base_family = "Arial", base_size = 12))
+
+page_break <- function() {
+  if (knitr::is_html_output()) {
+    htmltools::HTML('<div style="page-break-after: always;"></div>')
+  } else {
+    cat("\n\\newpage\n")
+  }
+}
+
+
+render_tbl <- function(tbl_gt_or_df, use_gt = TRUE) {
+  if (knitr::is_html_output() && use_gt) {
+    return(tbl_gt_or_df)
+  } else {
+    if (inherits(tbl_gt_or_df, "gtsummary")) {
+      return(as_flex_table(tbl_gt_or_df))
+    } else if (inherits(tbl_gt_or_df, "gt_tbl")) {
+      df <- try(gt::dt_data_get(tbl_gt_or_df), silent = TRUE)
+      if (inherits(df, "try-error") || is.null(df)) {
+        df <- try(tbl_gt_or_df[["_data"]], silent = TRUE)  # older gt versions
+      }
+      if (inherits(df, "try-error") || is.null(df)) {
+        df <- try(gt::dt_body_get(tbl_gt_or_df), silent = TRUE)  # body rows
+      }
+      df <- tibble::as_tibble(df)
+      return(flextable::autofit(flextable::flextable(df)))
+    } else if (is.data.frame(tbl_gt_or_df)) {
+      return(flextable::autofit(flextable::flextable(tbl_gt_or_df)))
+    } else {
+      return(tbl_gt_or_df)
+    }
+  }
+}
+
+
+
+```
+```{r, results='asis'}
+page_break()
+```
+
+# Figure 1: Cohort Flow Diagram
+
+```{r figure1-consort, fig.width=10, fig.height=8}
+fc <- counts$final_cohort_breakdown
+get_count <- function(nm) if (nm %in% names(fc)) as.integer(fc[[nm]]) else 0L
+
+breakdown_text <- paste0(
+  "<50 sequence: ", get_count("<50 sequence"), "\\n",
+  "≥50 sequence: ", get_count("≥50 sequence"), "\\n",
+  "AOOS: ", get_count("AOOS (out-of-sequence)")
+)
+
+consort_diagram <- grViz(glue("
+digraph consort {{
+  graph [rankdir = TB, splines = ortho, nodesep=0.35, ranksep=0.45]
+  node [shape=box, style='rounded,filled', fillcolor='white', color='#666666', fontname='Arial', fontsize=10]
+  edge [color='#666666', arrowsize=0.6]
+
+  A [label='All transplanted patients (STAR/PTR)\\nJan 2018 - April 2025\\nN = {format(counts$n_initial, big.mark=',')}', fillcolor='#F8F8F8']
+  B [label='With accepted offer records\\nN = {format(counts$n_after_join, big.mark=',')}']
+  C [label='After multi-organ exclusions\\nN = {format(counts$n_after_multiorg, big.mark=',')}']
+  D [label='After living donor exclusions\\nN = {format(counts$n_after_living, big.mark=',')}']
+  E [label='After split liver exclusions\\nN = {format(counts$n_after_split, big.mark=',')}']
+  F [label='After donor deduplication\\nN = {format(counts$n_after_dedup, big.mark=',')}']
+  G [label='After directed donation exclusions\\nN = {format(counts$n_after_directed, big.mark=',')}']
+  H [label='Final analysis cohort\\nN = {format(counts$n_final, big.mark=',')}\\n\\n{breakdown_text}', fillcolor='#EFEFEF']
+
+  X1 [label='Excluded:\\nOffers not in PTR dataset\\n(large portion are living donors)\\nN = {format(counts$n_initial - counts$n_after_join, big.mark=',')}', shape=note, fillcolor='#FFE6E6', color='#CC0000']
+  X2 [label='Excluded:\\nMulti-organ transplants\\nN = {format(counts$n_after_join - counts$n_after_multiorg, big.mark=',')}', shape=note, fillcolor='white', color='#AAAAAA']
+  X3 [label='Excluded:\\nLiving donor transplants\\nN = {format(counts$n_after_multiorg - counts$n_after_living, big.mark=',')}', shape=note, fillcolor='white', color='#AAAAAA']
+  X4 [label='Excluded:\\nSplit liver cases\\nN = {format(counts$n_after_living - counts$n_after_split, big.mark=',')}', shape=note, fillcolor='white', color='#AAAAAA']
+  X5 [label='Excluded:\\nDuplicate donors\\nN = {format(counts$n_after_split - counts$n_after_dedup, big.mark=',')}', shape=note, fillcolor='white', color='#AAAAAA']
+  X6 [label='Excluded:\\nDirected donations\\nN = {format(counts$n_after_dedup - counts$n_after_directed, big.mark=',')}', shape=note, fillcolor='white', color='#AAAAAA']
+  X7 [label='Excluded:\\nMissing MELD: {counts$n_excluded_meld}\\nMissing donor data: {counts$n_excluded_donor}\\nTotal N = {format(counts$n_before_step9 - counts$n_final, big.mark=',')}', shape=note, fillcolor='white', color='#AAAAAA']
+
+  A -> B; B -> C; C -> D; D -> E; E -> F; F -> G; G -> H
+  A -> X1 [arrowhead=none, color='#CC0000', style=bold]
+  B -> X2 [arrowhead=none, color='#BBBBBB']
+  C -> X3 [arrowhead=none, color='#BBBBBB']
+  D -> X4 [arrowhead=none, color='#BBBBBB']
+  E -> X5 [arrowhead=none, color='#BBBBBB']
+  F -> X6 [arrowhead=none, color='#BBBBBB']
+  G -> X7 [arrowhead=none, color='#BBBBBB']
+}}
+"))
+
+if (knitr::is_html_output()) {
+  consort_diagram
+} else {
+  tmp_png <- file.path(tempdir(), "consort_diagram.png")
+  consort_diagram %>%
+    DiagrammeRsvg::export_svg() %>%
+    charToRaw() %>%
+    rsvg::rsvg_png(tmp_png, width = 4800, height = 4000)
+  knitr::include_graphics(tmp_png)
+}
+```
+
+**Figure 1. Cohort flow diagram showing construction and exclusions.** Starting with all liver transplants from January 2018 to April 2025, sequential exclusion criteria were applied to create the final analysis cohort of `r format(counts$n_final, big.mark=",")` cases.
+
+```{r, results='asis'}
+page_break()
+```
+
+# Table 1: Baseline Characteristics
+
+```{r table1-data-prep}
+final_cohort <- final_cohort %>%
+  mutate(
+    donation_type = case_when(
+      NON_HRT_DON_donor %in% c("Y", "YES", "1", "TRUE") ~ "DCD",
+      NON_HRT_DON_donor %in% c("N", "NO", "0", "FALSE") ~ "DBD",
+      TRUE ~ NA_character_
+    ),
+    MACRO_FAT_CAT = {
+      v <- suppressWarnings(as.numeric(MACRO_FAT_LI_DON_donor))
+      case_when(
+        is.na(v) ~ NA_character_,
+        v == 0 ~ "0%",
+        v > 0 & v < 30 ~ "1-29%",
+        v >= 30 & v < 60 ~ "30-59%",
+        v >= 60 ~ "≥60%"
+      ) %>% factor(levels = c("0%", "1-29%", "30-59%", "≥60%"))
+    }
+  )
+```
+
+```{r table1}
+tbl1 <- final_cohort %>%
+  select(
+    seq_flag,
+    AGE, MELD_PELD_ADJ, GENDER,
+    AGE_DON_donor, donation_type, BMI_DON_CALC_donor,
+    MACRO_FAT_CAT, TBILI_DON_donor, SGOT_DON, SGPT_DON,
+    DRI, DSRI,
+    COLD_ISCH_num, WAIT_DAYS, DISTANCE, n_unique_ctr_contacted
+  ) %>%
+  tbl_summary(
+    by = seq_flag,
+    label = list(
+      AGE ~ "Recipient age (years)",
+      MELD_PELD_ADJ ~ "Recipient MELD/PELD",
+      GENDER ~ "Recipient gender",
+      AGE_DON_donor ~ "Donor age (years)",
+      donation_type ~ "Donation type",
+      BMI_DON_CALC_donor ~ "Donor BMI (kg/m²)",
+      MACRO_FAT_CAT ~ "Donor macrosteatosis",
+      TBILI_DON_donor ~ "Donor bilirubin (mg/dL)",
+      SGOT_DON ~ "Donor AST (U/L)",
+      SGPT_DON ~ "Donor ALT (U/L)",
+      DRI ~ "Donor Risk Index",
+      DSRI ~ "Discard Risk Index",
+      COLD_ISCH_num ~ "Cold ischemia time (hours)",
+      WAIT_DAYS ~ "Wait time (days)",
+      DISTANCE ~ "Distance (nautical miles)",
+      n_unique_ctr_contacted ~ "Centers contacted"
+    ),
+    statistic = list(
+      all_continuous() ~ "{median} ({p25}, {p75})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits = list(
+      all_continuous() ~ 1,
+      DRI ~ 2,
+      DSRI ~ 2
+    ),
+    missing = "no"
+  ) %>%
+  add_p(
+    test = list(
+      all_continuous() ~ "kruskal.test",
+      all_categorical() ~ "chisq.test"
+    )
+  ) %>%
+  modify_caption("**Table 1. Baseline Characteristics by Sequence Group**") %>%
+  modify_footnote(
+    all_stat_cols() ~ "Median (IQR) for continuous variables; n (%) for categorical variables"
+  ) %>%
+  modify_source_note(
+    "P-values: Kruskal-Wallis test for continuous variables; Pearson chi-square for categorical variables"
+  )
+
+tbl1
+```
+
+```{r, results='asis'}
+page_break()
+```
+
+# Figure 2: Offer Characteristics by Type
+
+```{r fig2-data-prep}
+seq_plot_df <- final_cohort %>%
+  mutate(
+    offer_group = if_else(is_open_offer, "Open offer", "Sequential"),
+    offer_group = factor(offer_group, levels = c("Sequential", "Open offer")),
+    seq_num = PTR_SEQUENCE_NUM_tx
+  ) %>%
+  filter(!is.na(seq_num), seq_num >= 1)
+
+centres_plot_df <- final_cohort %>%
+  mutate(
+    offer_group = if_else(is_open_offer, "Open offer", "Sequential"),
+    offer_group = factor(offer_group, levels = c("Sequential", "Open offer")),
+    n_ctr = n_unique_ctr_contacted
+  ) %>%
+  filter(!is.na(n_ctr), n_ctr >= 1)
+
+n_total_seq <- seq_plot_df %>% count(offer_group)
+n_total_ctr <- centres_plot_df %>% count(offer_group)
+
+seq_stats <- seq_plot_df %>%
+  group_by(offer_group) %>%
+  summarise(
+    med = median(seq_num, na.rm = TRUE),
+    p25 = quantile(seq_num, 0.25, na.rm = TRUE),
+    p75 = quantile(seq_num, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(txt = paste0(offer_group, ": ", comma(med), " (", comma(p25), "–", comma(p75), ")"))
+
+ctr_stats <- centres_plot_df %>%
+  group_by(offer_group) %>%
+  summarise(
+    med = median(n_ctr, na.rm = TRUE),
+    p25 = quantile(n_ctr, 0.25, na.rm = TRUE),
+    p75 = quantile(n_ctr, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(txt = paste0(offer_group, ": ", comma(med), " (", comma(p25), "–", comma(p75), ")"))
+```
+
+```{r fig2-panel-a, fig.width=6, fig.height=6}
+ymax_seq <- max(seq_plot_df$seq_num, na.rm = TRUE)
+
+pA <- ggplot(seq_plot_df, aes(x = offer_group, y = seq_num)) +
+  geom_violin(width = 0.9, trim = TRUE, colour = "grey20", fill = "grey85", linewidth = 0.3) +
+  geom_boxplot(width = 0.18, outlier.shape = NA, fill = "white", colour = "grey20", linewidth = 0.3) +
+  geom_text(
+    data = n_total_seq,
+    aes(x = offer_group, y = ymax_seq, label = paste0("n = ", comma(n))),
+    vjust = -0.6, size = 3.2, family = "Arial", inherit.aes = FALSE
+  ) +
+  scale_y_log10(
+    breaks = c(1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 3000, 5000, 10000),
+    labels = comma_format(),
+    expand = expansion(mult = c(0.02, 0.10))
+  ) +
+  coord_cartesian(ylim = c(1, ymax_seq * 1.08)) +
+  labs(
+    x = NULL,
+    y = "Sequence at acceptance (log₁₀ scale)",
+    title = "Sequence at acceptance"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", size = 12, margin = margin(b = 4)),
+    axis.text.x = element_text(face = "bold", size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey85", linewidth = 0.3),
+    plot.margin = margin(t = 4, r = 6, b = 4, l = 6)
+  )
+```
+
+```{r fig2-panel-b, fig.width=5, fig.height=6}
+ymax_ctr <- max(centres_plot_df$n_ctr, na.rm = TRUE)
+y_top_ctr <- max(25, ceiling(ymax_ctr / 5) * 5)
+
+pB <- ggplot(centres_plot_df, aes(x = offer_group, y = n_ctr)) +
+  geom_jitter(width = 0.18, height = 0, size = 0.5, alpha = 0.18, colour = "grey70") +
+  geom_boxplot(width = 0.35, outlier.shape = NA, fill = "white", colour = "grey20", linewidth = 0.4) +
+  geom_text(
+    data = n_total_ctr,
+    aes(x = offer_group, y = y_top_ctr, label = paste0("n = ", comma(n))),
+    vjust = -0.6, size = 3.2, family = "Arial", inherit.aes = FALSE
+  ) +
+  scale_y_continuous(
+    breaks = seq(0, y_top_ctr, by = 5),
+    expand = expansion(mult = c(0.02, 0.10))
+  ) +
+  coord_cartesian(ylim = c(0, y_top_ctr * 1.08)) +
+  labs(
+    x = NULL,
+    y = "Unique centers contacted",
+    title = "Unique centers contacted"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", size = 12, margin = margin(b = 4)),
+    axis.text.x = element_text(face = "bold", size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey85", linewidth = 0.3),
+    plot.margin = margin(t = 4, r = 6, b = 4, l = 6)
+  )
+```
+
+```{r fig2-combined, fig.width=11, fig.height=6}
+caption_text <- str_wrap(
+  paste0(
+    "Panel A: Violin plots with ovarlaid boxplots. ",
+    "Medians (IQR): ", paste(seq_stats$txt, collapse = "; "), ". ",
+    "Panel B: Boxes show Q1–Q3 with median; points are individual accepted match-runs. ",
+    "Medians (IQR): ", paste(ctr_stats$txt, collapse = "; "), "."
+  ),
+  width = 159
+)
+
+fig2 <- (pA | pB) +
+  plot_layout(widths = c(1.5, 1)) +
+  plot_annotation(
+    title = "Offer characteristics by offer type",
+    tag_levels = "A",
+    caption = caption_text
+  ) &
+  theme(
+    plot.title = element_text(family = "Arial", face = "bold", size = 12, margin = margin(b = 6)),
+    plot.caption = element_text(family = "Arial", colour = "grey35", size = 12, margin = margin(t = 8)),
+    plot.tag = element_text(family = "Arial", face = "bold", size = 12),
+    plot.tag.position = c(0.02, 0.98)
+  )
+
+fig2
+```
+
+**Figure 2. Offer characteristics by offer type.** (A) Distribution of sequence number at acceptance for AOOS offers versus sequential offers. (B) Distribution of unique centers contacted before acceptance. AOOS offers bypass sequential allocation and are typically accepted later in the match run.
+```{r, results='asis'}
+page_break()
+```
+
+# Figure 3: Yearly Distribution of Transplants
+
+```{r fig3-yearly-data}
+# Calculate yearly totals for caption
+yearly_totals <- final_cohort %>%
+  mutate(year = lubridate::year(TX_DATE)) %>%
+  count(year, name = "total")
+
+levs <- c("<50", "≥50", "AOOS")
+plot_df <- final_cohort %>%
+  mutate(
+    year = lubridate::year(TX_DATE),
+    seq_group = case_when(
+      is_open_offer ~ "AOOS",
+      PTR_SEQUENCE_NUM_tx < 50 ~ "<50",
+      PTR_SEQUENCE_NUM_tx >= 50 ~ "≥50"
+    ) %>% factor(levels = levs)
+  ) %>%
+  count(year, seq_group) %>%
+  group_by(year) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup() %>%
+  complete(year, seq_group, fill = list(n = 0, prop = 0))
+
+colors <- c("<50" = "#2166AC", "≥50" = "#5AAE61", "AOOS" = "#D73027")
+```
+
+```{r fig3-plot, fig.width=10, fig.height=6}
+gg_plot <- ggplot(plot_df, aes(x = factor(year), y = prop, fill = seq_group)) +
+  geom_col(width = 0.75, colour = "white", linewidth = 0.3) +
+  geom_text(
+    aes(label = ifelse(prop < 0.025, "", scales::percent(prop, accuracy = 0.1))),
+    position = position_stack(vjust = 0.5),
+    colour = "white", size = 3, fontface = "bold", family = "Arial"
+  ) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  scale_fill_manual(
+    values = colors,
+    name = "Offer Type",
+    labels = c("<50" = "Sequence <50", "≥50" = "Sequence ≥50", "AOOS" = "AOOS")
+  ) +
+  labs(
+    x = "Year",
+    y = "Proportion of Transplants (%)",
+    title = "Yearly Distribution of Liver Transplants by Offer Type"
+  ) +
+  theme_classic(base_size = 12, base_family = "Arial") +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(0.4, "cm"),
+    axis.title = element_text(size = 12, face = "bold"),
+    axis.text = element_text(size = 12),
+    plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+    panel.grid.major.y = element_line(color = "grey90", linewidth = 0.3),
+    panel.grid.minor = element_blank()
+  ) +
+  guides(fill = guide_legend(
+    title.position = "top",
+    title.hjust = 0.5,
+    nrow = 1
+  ))
+
+gg_plot
+```
+
+**Figure 3. Yearly distribution of liver transplants by offer type, 2018-2025.** The stacked bar chart shows the proportion of liver transplants by offer type across years. Total transplants by year: `r paste(yearly_totals$year, "=", comma(yearly_totals$total), collapse = "; ")`.
+```{r, results='asis'}
+page_break()
+```
+
+# Figure 4: Placement Time and Clamp Timing by Sequence
+
+```{r fig4-data-prep}
+timing_cohort <- final_cohort %>%
+  mutate(
+    placement_time_hours = case_when(
+      is.na(earliest_init) ~ NA_real_,
+      is.na(FINAL_RESPONSE_DT_tx) ~ NA_real_,
+      TRUE ~ as.numeric(difftime(FINAL_RESPONSE_DT_tx, earliest_init, units = "hours"))
+    )
+  ) %>%
+  filter(
+    !is.na(FINAL_RESPONSE_DT_tx),
+    as.Date(FINAL_RESPONSE_DT_tx) <= TX_DATE,
+    !is.na(placement_time_hours),
+    !is.na(diff_final_clamp),
+    earliest_init <= FINAL_RESPONSE_DT_tx
+  )
+
+timing_n <- nrow(timing_cohort)
+
+timing_summary <- timing_cohort %>%
+  mutate(
+    sequence_bin = case_when(
+      seq_flag == "AOOS (out-of-sequence)" ~ "AOOS",
+      PTR_SEQUENCE_NUM_tx == 1 ~ "1",
+      PTR_SEQUENCE_NUM_tx == 2 ~ "2",
+      PTR_SEQUENCE_NUM_tx == 3 ~ "3",
+      PTR_SEQUENCE_NUM_tx == 4 ~ "4",
+      PTR_SEQUENCE_NUM_tx == 5 ~ "5",
+      PTR_SEQUENCE_NUM_tx >= 6 & PTR_SEQUENCE_NUM_tx <= 10 ~ "6-10",
+      PTR_SEQUENCE_NUM_tx >= 11 & PTR_SEQUENCE_NUM_tx <= 20 ~ "11-20",
+      PTR_SEQUENCE_NUM_tx >= 21 & PTR_SEQUENCE_NUM_tx <= 30 ~ "21-30",
+      PTR_SEQUENCE_NUM_tx >= 31 & PTR_SEQUENCE_NUM_tx <= 50 ~ "31-50",
+      PTR_SEQUENCE_NUM_tx >= 51 & PTR_SEQUENCE_NUM_tx <= 100 ~ "51-100",
+      PTR_SEQUENCE_NUM_tx >= 101 & PTR_SEQUENCE_NUM_tx <= 500 ~ "101-500",
+      PTR_SEQUENCE_NUM_tx > 500 ~ "500+",
+      TRUE ~ "Other"
+    )
+  ) %>%
+  group_by(sequence_bin) %>%
+  summarise(
+    n_obs = n(),
+    placement_time_median = median(placement_time_hours, na.rm = TRUE),
+    clamp_timing_median = median(diff_final_clamp, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+seq_order <- c("1", "2", "3", "4", "5", "6-10", "11-20", "21-30", 
+               "31-50", "51-100", "101-500", "500+", "AOOS")
+
+timing_summary <- timing_summary %>%
+  mutate(sequence_bin = factor(sequence_bin, levels = seq_order)) %>%
+  arrange(sequence_bin)
+
+y1_min <- min(timing_summary$placement_time_median, na.rm = TRUE)
+y1_max <- max(timing_summary$placement_time_median, na.rm = TRUE)
+y2_min <- min(timing_summary$clamp_timing_median, na.rm = TRUE)
+y2_max <- max(timing_summary$clamp_timing_median, na.rm = TRUE)
+
+scale_factor <- (y1_max - y1_min) / (y2_max - y2_min)
+to_primary <- function(y) (y - y2_min) * scale_factor + y1_min
+to_secondary <- function(y) (y - y1_min) / scale_factor + y2_min
+
+plot_data <- timing_summary %>%
+  mutate(
+    clamp_on_primary = to_primary(clamp_timing_median),
+    is_aoos = sequence_bin == "AOOS"
+  )
+```
+
+```{r fig4-plot, fig.width=10, fig.height=7}
+p_dual <- ggplot(plot_data, aes(x = sequence_bin, group = 1)) +
+  geom_line(aes(y = placement_time_median, colour = "Placement time"), 
+            linewidth = 1) +
+  geom_point(aes(y = placement_time_median, colour = "Placement time"), 
+             size = 2) +
+  geom_line(aes(y = clamp_on_primary, colour = "Clamp timing"),
+            linewidth = 1, linetype = "dashed") +
+  geom_point(aes(y = clamp_on_primary, colour = "Clamp timing"),
+             shape = 15, size = 2) +
+  geom_point(
+    data = subset(plot_data, is_aoos),
+    aes(y = placement_time_median),
+    shape = 8, size = 4, colour = "#1f77b4"
+  ) +
+  geom_point(
+    data = subset(plot_data, is_aoos),
+    aes(y = clamp_on_primary),
+    shape = 8, size = 4, colour = "#d62728"
+  ) +
+  scale_y_continuous(
+    name = "Placement time (hours, median)",
+    breaks = seq(0, ceiling(y1_max), 2),
+    sec.axis = sec_axis(
+      ~ to_secondary(.),
+      name = "Clamp timing (hours relative to cross-clamp, median)",
+      breaks = seq(floor(y2_min), 0, 2)
+    )
+  ) +
+  scale_colour_manual(
+    NULL,
+    values = c("Placement time" = "#1f77b4", "Clamp timing" = "#d62728")
+  ) +
+  labs(
+    x = "Sequence bin",
+    title = "Placement Time vs Clamp Timing Across Sequence Bins"
+  ) +
+  theme_minimal(base_size = 12, base_family = "Arial") +
+  theme(
+    legend.position = "top",
+    legend.text = element_text(size = 12),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 12),
+    plot.title = element_text(face = "bold", size = 12)
+  )
+
+p_dual
+```
+
+**Figure 4. Placement time and clamp timing by sequence.** Dual-axis plot showing median placement time (solid blue line, left axis) and median timing of final acceptance relative to cross-clamp (dashed red line, right axis) across sequence bins. AOOS highlighted with star markers. N = `r comma(timing_n)` cases with plausible timing data.
+```{r, results='asis'}
+page_break()
+```
+
+# Figure 5: Response Timing by Donor Type and Sequence
+
+```{r fig5-data-prep}
+final_plot_data <- timing_cohort %>%
+  mutate(
+    donation_type = case_when(
+      NON_HRT_DON_donor %in% c("Y", "YES", "1", "TRUE") ~ "DCD",
+      NON_HRT_DON_donor %in% c("N", "NO", "0", "FALSE") ~ "DBD",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(donation_type), !is.na(seq_flag))
+
+sequence_colors <- c(
+  "<50 sequence" = "#00468B", 
+  "≥50 sequence" = "#ED0000", 
+  "AOOS (out-of-sequence)" = "#42B540"
+)
+
+# Calculate medians for caption
+box_medians <- final_plot_data %>%
+  group_by(donation_type, seq_flag) %>%
+  summarise(
+    med = median(diff_final_clamp, na.rm = TRUE),
+    q25 = quantile(diff_final_clamp, 0.25, na.rm = TRUE),
+    q75 = quantile(diff_final_clamp, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+make_cumulative_plot <- function(data, donor_type_filter, plot_label) {
+  plot_data <- data %>% filter(donation_type == donor_type_filter)
+  max_val <- max(plot_data$diff_final_clamp, na.rm = TRUE)
+  
+  ggplot(plot_data, aes(x = diff_final_clamp, color = seq_flag)) +
+    stat_ecdf(linewidth = 1.2, alpha = 0.9) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", 
+               linewidth = 0.7, alpha = 0.8) +
+    coord_cartesian(xlim = c(-50, max_val)) +
+    scale_color_manual(values = sequence_colors, name = "Sequence Group") +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2), 
+      labels = scales::percent_format(accuracy = 1)
+    ) +
+    labs(
+      title = paste0(plot_label, ": ", donor_type_filter, " Donors"),
+      x = "Hours from Cross-Clamp",
+      y = "Cumulative Proportion"
+    ) +
+    theme_minimal(base_size = 10, base_family = "Arial") +
+    theme(
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(color = "grey92", linewidth = 0.4),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.6),
+      plot.title = element_text(size = 11, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 10, face = "bold"),
+      axis.text = element_text(size = 9),
+      legend.position = "none",
+      plot.margin = margin(5, 5, 5, 5)
+    ) +
+    annotate("text", x = 2, y = 0.05, label = "Cross-clamp", 
+             angle = 90, hjust = 0, vjust = 0.5, size = 3.5, 
+             fontface = "bold", color = "grey30")
+}
+
+make_boxplot <- function(data, plot_label) {
+  ggplot(data, aes(x = donation_type, y = diff_final_clamp, fill = seq_flag)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", 
+               alpha = 0.8, linewidth = 0.7) +
+    geom_boxplot(
+      position = position_dodge(width = 0.8), 
+      alpha = 0.8, 
+      outlier.alpha = 0.4, 
+      outlier.size = 0.8, 
+      linewidth = 0.5
+    ) +
+    scale_fill_manual(values = sequence_colors, name = "Sequence Group") +
+    coord_cartesian(ylim = c(-50, max(data$diff_final_clamp, na.rm = TRUE))) +
+    labs(
+      title = plot_label,
+      x = "Donation Type",
+      y = "Hours from Cross-Clamp"
+    ) +
+    theme_minimal(base_size = 10, base_family = "Arial") +
+    theme(
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(color = "grey92", linewidth = 0.4),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.6),
+      plot.title = element_text(size = 11, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 10, face = "bold"),
+      axis.text = element_text(size = 9),
+      legend.position = "none",
+      plot.margin = margin(5, 5, 5, 5)
+    ) +
+    annotate("text", x = 0.7, y = 2, label = "Cross-clamp", 
+             hjust = 0, vjust = 0, size = 3.5, fontface = "bold", 
+             color = "grey30")
+}
+
+make_proportion_plot <- function(data) {
+  prop_data <- data %>%
+    group_by(donation_type, seq_flag) %>%
+    summarise(
+      n_post = sum(diff_final_clamp > 0, na.rm = TRUE),
+      total = n(),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      prop = (n_post / total) * 100,
+      label = paste0(n_post, "/", total, "\n(", round(prop, 1), "%)")
+    )
+  
+  ggplot(prop_data, aes(x = donation_type, y = prop, fill = seq_flag)) +
+    geom_col(position = "dodge", width = 0.7, alpha = 0.8) +
+    geom_text(
+      aes(label = label), 
+      position = position_dodge(width = 0.7), 
+      vjust = -0.3, 
+      size = 2.5, 
+      fontface = "bold"
+    ) +
+    scale_fill_manual(values = sequence_colors, name = "Sequence Group") +
+    labs(
+      title = "D. Post-Clamp Final Response Proportion",
+      x = "Donation Type",
+      y = "Post-Clamp Final Response (%)"
+    ) +
+    ylim(0, max(prop_data$prop) * 1.2) +
+    theme_minimal(base_size = 10, base_family = "Arial") +
+    theme(
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(color = "grey92", linewidth = 0.4),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.6),
+      plot.title = element_text(size = 11, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 10, face = "bold"),
+      axis.text = element_text(size = 9),
+      legend.position = "none",
+      plot.margin = margin(5, 5, 5, 5)
+    )
+}
+```
+
+```{r fig5-create-panels, fig.width=11, fig.height=10}
+p_final_dbd <- make_cumulative_plot(final_plot_data, "DBD", "A")
+p_final_dcd <- make_cumulative_plot(final_plot_data, "DCD", "B")
+p_final_box <- make_boxplot(final_plot_data, "C. Final Response Distribution")
+p_proportion <- make_proportion_plot(final_plot_data)
+
+color_key <- ggplot() +
+  annotate("point", x = 1:3, y = rep(1, 3), 
+           color = sequence_colors, size = 4) +
+  annotate("text", x = 1:3, y = rep(1, 3), 
+           label = names(sequence_colors),
+           hjust = -0.2, size = 3.5, fontface = "bold") +
+  xlim(0.5, 5) +
+  ylim(0.8, 1.2) +
+  theme_void() +
+  theme(plot.margin = margin(5, 5, 5, 5))
+
+final_combined_plot <- ((p_final_dbd | p_final_dcd) / 
+                        (p_final_box | p_proportion)) /
+  color_key +
+  plot_layout(heights = c(1, 1, 0.15)) +
+  plot_annotation(
+    title = "Response Timing Relative to Cross-Clamp by Donor Type and Sequence Group",
+    theme = theme(
+      plot.title = element_text(
+        size = 12, 
+        face = "bold", 
+        hjust = 0.5, 
+        family = "Arial",
+        margin = margin(b = 8)
+      ),
+      plot.margin = margin(15, 15, 15, 15)
+    )
+  )
+
+final_combined_plot
+```
+
+**Figure 5. Response timing relative to cross-clamp.** (A-B) Cumulative distribution curves showing timing of final organ acceptance relative to donor cross-clamp for DBD and DCD donors, stratified by sequence group. (C) Box plots comparing response timing distributions across donation types and sequence groups. Medians (IQR) in hours from cross-clamp - DBD: <50 sequence = `r sprintf("%.1f (%.1f–%.1f)", box_medians$med[box_medians$donation_type=="DBD" & box_medians$seq_flag=="<50 sequence"], box_medians$q25[box_medians$donation_type=="DBD" & box_medians$seq_flag=="<50 sequence"], box_medians$q75[box_medians$donation_type=="DBD" & box_medians$seq_flag=="<50 sequence"])`; ≥50 sequence = `r sprintf("%.1f (%.1f–%.1f)", box_medians$med[box_medians$donation_type=="DBD" & box_medians$seq_flag=="≥50 sequence"], box_medians$q25[box_medians$donation_type=="DBD" & box_medians$seq_flag=="≥50 sequence"], box_medians$q75[box_medians$donation_type=="DBD" & box_medians$seq_flag=="≥50 sequence"])`; AOOS = `r sprintf("%.1f (%.1f–%.1f)", box_medians$med[box_medians$donation_type=="DBD" & box_medians$seq_flag=="AOOS (out-of-sequence)"], box_medians$q25[box_medians$donation_type=="DBD" & box_medians$seq_flag=="AOOS (out-of-sequence)"], box_medians$q75[box_medians$donation_type=="DBD" & box_medians$seq_flag=="AOOS (out-of-sequence)"])`. DCD: <50 sequence = `r sprintf("%.1f (%.1f–%.1f)", box_medians$med[box_medians$donation_type=="DCD" & box_medians$seq_flag=="<50 sequence"], box_medians$q25[box_medians$donation_type=="DCD" & box_medians$seq_flag=="<50 sequence"], box_medians$q75[box_medians$donation_type=="DCD" & box_medians$seq_flag=="<50 sequence"])`; ≥50 sequence = `r sprintf("%.1f (%.1f–%.1f)", box_medians$med[box_medians$donation_type=="DCD" & box_medians$seq_flag=="≥50 sequence"], box_medians$q25[box_medians$donation_type=="DCD" & box_medians$seq_flag=="≥50 sequence"], box_medians$q75[box_medians$donation_type=="DCD" & box_medians$seq_flag=="≥50 sequence"])`; AOOS = `r sprintf("%.1f (%.1f–%.1f)", box_medians$med[box_medians$donation_type=="DCD" & box_medians$seq_flag=="AOOS (out-of-sequence)"], box_medians$q25[box_medians$donation_type=="DCD" & box_medians$seq_flag=="AOOS (out-of-sequence)"], box_medians$q75[box_medians$donation_type=="DCD" & box_medians$seq_flag=="AOOS (out-of-sequence)"])`. (D) Proportion of cases where final acceptance occurred after cross-clamp. Dashed line at 0 hours represents cross-clamp time. N = `r comma(nrow(final_plot_data))` cases.
+```{r, results='asis'}
+page_break()
+```
+
+# Figure 6: Survival by Donor Type and Sequence Group
+
+```{r fig6-survival-prep}
+surv_df <- final_cohort %>%
+  mutate(
+    seq_flag = factor(seq_flag, levels = c("<50 sequence", "≥50 sequence", "AOOS (out-of-sequence)")),
+    PTIME_yrs = PTIME / 365.25,
+    GTIME_yrs = GTIME / 365.25,
+    donation_type = case_when(
+      NON_HRT_DON_donor %in% c("Y", "YES", "1", "TRUE") ~ "DCD",
+      NON_HRT_DON_donor %in% c("N", "NO", "0", "FALSE") ~ "DBD",
+      TRUE ~ NA_character_
+    ),
+    donation_type = factor(donation_type, levels = c("DBD", "DCD"))
+  ) %>%
+  filter(!is.na(donation_type), !is.na(PSTATUS), !is.na(GSTATUS)) %>%
+  droplevels()
+
+sequence_colors <- c(
+  "<50 sequence" = "#00468B", 
+  "≥50 sequence" = "#ED0000", 
+  "AOOS (out-of-sequence)" = "#42B540"
+)
+
+surv_dcd <- surv_df %>% filter(donation_type == "DCD") %>% droplevels()
+surv_dbd <- surv_df %>% filter(donation_type == "DBD") %>% droplevels()
+
+surv_dcd$seq_flag <- relevel(surv_dcd$seq_flag, ref = "<50 sequence")
+surv_dbd$seq_flag <- relevel(surv_dbd$seq_flag, ref = "<50 sequence")
+
+fit_patient_dcd <- survfit(Surv(PTIME_yrs, PSTATUS) ~ seq_flag, data = surv_dcd)
+fit_graft_dcd <- survfit(Surv(GTIME_yrs, GSTATUS) ~ seq_flag, data = surv_dcd)
+fit_patient_dbd <- survfit(Surv(PTIME_yrs, PSTATUS) ~ seq_flag, data = surv_dbd)
+fit_graft_dbd <- survfit(Surv(GTIME_yrs, GSTATUS) ~ seq_flag, data = surv_dbd)
+
+labs_short <- c("<50", "≥50", "AOOS")
+pal <- unname(sequence_colors)
+```
+
+```{r fig6-survival-plot, fig.width=12, fig.height=10}
+p1 <- ggsurvplot(
+  fit_patient_dcd, data = surv_dcd,
+  title = "A. DCD Patient Survival",
+  xlim = c(0, 5), ylim = c(0.6, 1), break.time.by = 1,
+  xlab = "Years since transplant", ylab = "Survival probability",
+  legend.title = "Sequence",
+  legend.labs = labs_short,
+  palette = pal,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.2, 0.65),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_minimal(base_family = "Arial", base_size = 12)
+)
+
+p2 <- ggsurvplot(
+  fit_graft_dcd, data = surv_dcd,
+  title = "B. DCD Graft Survival",
+  xlim = c(0, 5), ylim = c(0.6, 1), break.time.by = 1,
+  xlab = "Years since transplant", ylab = "Survival probability",
+  legend.title = "Sequence",
+  legend.labs = labs_short,
+  palette = pal,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.2, 0.65),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_minimal(base_family = "Arial", base_size = 12)
+)
+
+p3 <- ggsurvplot(
+  fit_patient_dbd, data = surv_dbd,
+  title = "C. DBD Patient Survival",
+  xlim = c(0, 5), ylim = c(0.6, 1), break.time.by = 1,
+  xlab = "Years since transplant", ylab = "Survival probability",
+  legend.title = "Sequence",
+  legend.labs = labs_short,
+  palette = pal,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.2, 0.65),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_minimal(base_family = "Arial", base_size = 12)
+)
+
+p4 <- ggsurvplot(
+  fit_graft_dbd, data = surv_dbd,
+  title = "D. DBD Graft Survival",
+  xlim = c(0, 5), ylim = c(0.6, 1), break.time.by = 1,
+  xlab = "Years since transplant", ylab = "Survival probability",
+  legend.title = "Sequence",
+  legend.labs = labs_short,
+  palette = pal,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.2, 0.65),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_minimal(base_family = "Arial", base_size = 12)
+)
+
+p1_stack <- p1$plot / p1$table + plot_layout(heights = c(4, 1))
+p2_stack <- p2$plot / p2$table + plot_layout(heights = c(4, 1))
+p3_stack <- p3$plot / p3$table + plot_layout(heights = c(4, 1))
+p4_stack <- p4$plot / p4$table + plot_layout(heights = c(4, 1))
+
+combined_survival <- (p1_stack | p2_stack) / (p3_stack | p4_stack) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    plot.margin = margin(6, 6, 6, 6)
+  )
+
+print(combined_survival)
+```
+
+**Figure 6. Kaplan-Meier survival curves by donor type and sequence group.** Patient and graft survival stratified by DCD versus DBD and sequence group at acceptance. Risk tables show number at risk at each timepoint. Log-rank p-values shown on each panel. See Table S1 in supplement for detailed percentages and 95% CI's at 1-, 3- and 5-years respectively.
+
+```{r, results='asis'}
+page_break()
+```
+
+# Figure 7: Graft Survival by Cross-Clamp Timing
+
+```{r fig7-prep}
+dcd_oos <- timing_cohort %>% filter(donation_type=="DCD", seq_flag=="AOOS (out-of-sequence)")
+dbd_oos <- timing_cohort %>% filter(donation_type=="DBD", seq_flag=="AOOS (out-of-sequence)")
+dcd_seq <- timing_cohort %>% filter(donation_type=="DCD", seq_flag %in% c("<50 sequence","≥50 sequence"))
+dbd_seq <- timing_cohort %>% filter(donation_type=="DBD", seq_flag %in% c("<50 sequence","≥50 sequence"))
+
+timing_cohort <- timing_cohort %>%
+  mutate(
+    donation_type = case_when(
+      NON_HRT_DON_donor %in% c("Y","YES","1","TRUE") ~ "DCD",
+      NON_HRT_DON_donor %in% c("N","NO","0","FALSE") ~ "DBD",
+      TRUE ~ NA_character_
+    ),
+    clamp_timing = case_when(
+      diff_final_clamp >  0 ~ "Post cross-clamp",
+      diff_final_clamp <= 0 ~ "Pre cross-clamp",
+      TRUE ~ NA_character_
+    ) %>% factor(levels = c("Pre cross-clamp", "Post cross-clamp")),
+    GTIME_yrs = GTIME / 365.25,
+    PTIME_yrs = PTIME / 365.25,
+    GTIME_1yr = pmin(GTIME_yrs, 1),
+    PTIME_1yr = pmin(PTIME_yrs, 1),
+    GSTATUS_1yr = ifelse(GTIME_yrs > 1, 0, GSTATUS),
+    PSTATUS_1yr = ifelse(PTIME_yrs > 1, 0, PSTATUS)
+  ) %>%
+  filter(
+    !is.na(donation_type), !is.na(clamp_timing),
+    !is.na(GTIME_yrs), !is.na(GSTATUS),
+    !is.na(PTIME_yrs), !is.na(PSTATUS)
+  ) %>%
+  droplevels()
+
+dcd_oos <- timing_cohort %>% filter(donation_type=="DCD", seq_flag=="AOOS (out-of-sequence)")
+dbd_oos <- timing_cohort %>% filter(donation_type=="DBD", seq_flag=="AOOS (out-of-sequence)")
+dcd_seq <- timing_cohort %>% filter(donation_type=="DCD", seq_flag %in% c("<50 sequence","≥50 sequence"))
+dbd_seq <- timing_cohort %>% filter(donation_type=="DBD", seq_flag %in% c("<50 sequence","≥50 sequence"))
+
+clamp_cols <- c("Pre cross-clamp"="#32CD32", "Post cross-clamp"="#8B0000")
+
+fit_g_dcd_oos <- survfit(Surv(GTIME_1yr, GSTATUS_1yr) ~ clamp_timing, data = dcd_oos)
+fit_g_dbd_oos <- survfit(Surv(GTIME_1yr, GSTATUS_1yr) ~ clamp_timing, data = dbd_oos)
+fit_g_dcd_seq <- survfit(Surv(GTIME_1yr, GSTATUS_1yr) ~ clamp_timing, data = dcd_seq)
+fit_g_dbd_seq <- survfit(Surv(GTIME_1yr, GSTATUS_1yr) ~ clamp_timing, data = dbd_seq)
+```
+
+```{r fig7-graft-xc, fig.width=12, fig.height=10}
+p1_g <- ggsurvplot(
+  fit_g_dcd_oos, data = dcd_oos,
+  title = "A. DCD AOOS - Graft",
+  xlim = c(0, 1), ylim = c(0.80, 1), break.time.by = 0.25,
+  xlab = "Years since transplant",
+  ylab = "Graft survival probability",
+  legend.title = "Response timing",
+  legend.labs = c("Pre cross-clamp", "Post cross-clamp"),
+  palette = clamp_cols,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.05, 0.85),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_classic(base_size = 12, base_family = "Arial")
+)
+
+p2_g <- ggsurvplot(
+  fit_g_dbd_oos, data = dbd_oos,
+  title = "B. DBD AOOS - Graft",
+  xlim = c(0, 1), ylim = c(0.80, 1), break.time.by = 0.25,
+  xlab = "Years since transplant",
+  ylab = "Graft survival probability",
+  legend.title = "Response timing",
+  legend.labs = c("Pre cross-clamp", "Post cross-clamp"),
+  palette = clamp_cols,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.05, 0.85),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_classic(base_size = 12, base_family = "Arial")
+)
+
+p3_g <- ggsurvplot(
+  fit_g_dcd_seq, data = dcd_seq,
+  title = "C. DCD Sequential - Graft",
+  xlim = c(0, 1), ylim = c(0.80, 1), break.time.by = 0.25,
+  xlab = "Years since transplant",
+  ylab = "Graft survival probability",
+  legend.title = "Response timing",
+  legend.labs = c("Pre cross-clamp", "Post cross-clamp"),
+  palette = clamp_cols,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.05, 0.85),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_classic(base_size = 12, base_family = "Arial")
+)
+
+p4_g <- ggsurvplot(
+  fit_g_dbd_seq, data = dbd_seq,
+  title = "D. DBD Sequential - Graft",
+  xlim = c(0, 1), ylim = c(0.80, 1), break.time.by = 0.25,
+  xlab = "Years since transplant",
+  ylab = "Graft survival probability",
+  legend.title = "Response timing",
+  legend.labs = c("Pre cross-clamp", "Post cross-clamp"),
+  palette = clamp_cols,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.05, 0.85),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_classic(base_size = 12, base_family = "Arial")
+)
+
+combined_graft <- arrange_ggsurvplots(
+  list(p1_g, p2_g, p3_g, p4_g),
+  ncol = 2, nrow = 2,
+  print = TRUE
+)
+```
+
+**Figure 7. Graft survival by cross-clamp timing.** Kaplan-Meier curves comparing 1-year graft survival for cases where final acceptance occurred before versus after donor cross-clamp, stratified by donor type (DCD/DBD) and allocation pattern (AOOS/Sequential). All cases censored at 1 year. P-values from log-rank tests shown on each panel.
+```{r, results='asis'}
+page_break()
+```
+
+# Figure 8: Multinomial Regression Predictors
+
+```{r fig8-multinom-prep, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# ============================================================================
+# DATA PREPARATION WITH EXCLUSION TRACKING
+# ============================================================================
+
+cat("\n=== DATA PREPARATION FOR MULTINOMIAL MODEL ===\n")
+
+# Initialize exclusion tracker
+starting_n <- nrow(timing_cohort)
+exclusion_tracker <- tibble(
+  step = character(),
+  n_excluded = numeric(),
+  n_remaining = numeric(),
+  reason = character()
+)
+
+cat("Starting cohort: timing_cohort with", comma(starting_n), "observations\n\n")
+
+# Derive all variables first
+multinom_data <- timing_cohort %>%
+  mutate(
+    MACRO_FAT_LI_DON_binned = case_when(
+      is.na(MACRO_FAT_LI_DON_donor) ~ "Unknown",
+      MACRO_FAT_LI_DON_donor >= 0 & MACRO_FAT_LI_DON_donor < 10 ~ "0-10%",
+      MACRO_FAT_LI_DON_donor >= 10 & MACRO_FAT_LI_DON_donor < 30 ~ "10-30%",
+      MACRO_FAT_LI_DON_donor >= 30 & MACRO_FAT_LI_DON_donor < 60 ~ "30-60%",
+      MACRO_FAT_LI_DON_donor >= 60 ~ "≥60%"
+    ) %>% factor(levels = c("0-10%", "10-30%", "30-60%", "≥60%", "Unknown")),
+    
+    LI_FIBROSIS_collapsed = case_when(
+      is.na(LI_FIBROSIS) ~ "Unknown",
+      LI_FIBROSIS %in% c("0") ~ "None",
+      LI_FIBROSIS %in% c("1", "2") ~ "Mild",
+      LI_FIBROSIS %in% c("3", "4", "5", "6") ~ "Moderate-Severe"
+    ) %>% factor(levels = c("None", "Mild", "Moderate-Severe", "Unknown")),
+    
+    SGOT_DON_binned = case_when(
+      is.na(SGOT_DON) ~ NA_character_,
+      SGOT_DON < 100 ~ "Normal (<100 U/L)",
+      SGOT_DON >= 100 & SGOT_DON < 500 ~ "Mild (100-499 U/L)",
+      SGOT_DON >= 500 & SGOT_DON < 1000 ~ "Moderate (500-999 U/L)",
+      SGOT_DON >= 1000 ~ "Severe (≥1000 U/L)"
+    ) %>% factor(levels = c("Normal (<100 U/L)", "Mild (100-499 U/L)", 
+                            "Moderate (500-999 U/L)", "Severe (≥1000 U/L)")),
+    
+    SGPT_DON_binned = case_when(
+      is.na(SGPT_DON) ~ NA_character_,
+      SGPT_DON < 100 ~ "Normal (<100 U/L)",
+      SGPT_DON >= 100 & SGPT_DON < 500 ~ "Mild (100-499 U/L)",
+      SGPT_DON >= 500 & SGPT_DON < 1000 ~ "Moderate (500-999 U/L)",
+      SGPT_DON >= 1000 ~ "Severe (≥1000 U/L)"
+    ) %>% factor(levels = c("Normal (<100 U/L)", "Mild (100-499 U/L)", 
+                            "Moderate (500-999 U/L)", "Severe (≥1000 U/L)")),
+    
+    TBILI_DON_binned = case_when(
+      is.na(TBILI_DON_donor) ~ NA_character_,
+      TBILI_DON_donor < 1.5 ~ "Normal (<1.5 mg/dL)",
+      TBILI_DON_donor >= 1.5 & TBILI_DON_donor < 3.0 ~ "Mild (1.5-2.9 mg/dL)",
+      TBILI_DON_donor >= 3.0 & TBILI_DON_donor < 5.0 ~ "Moderate (3.0-4.9 mg/dL)",
+      TBILI_DON_donor >= 5.0 ~ "Severe (≥5.0 mg/dL)"
+    ) %>% factor(levels = c("Normal (<1.5 mg/dL)", "Mild (1.5-2.9 mg/dL)", 
+                            "Moderate (3.0-4.9 mg/dL)", "Severe (≥5.0 mg/dL)")),
+    
+    CREAT_DON_binned = case_when(
+      is.na(CREAT_DON) ~ NA_character_,
+      CREAT_DON < 1.2 ~ "Normal (<1.2 mg/dL)",
+      CREAT_DON >= 1.2 & CREAT_DON < 2.0 ~ "Mild dysfunction (1.2-1.9 mg/dL)",
+      CREAT_DON >= 2.0 & CREAT_DON < 3.0 ~ "Moderate dysfunction (2.0-2.9 mg/dL)",
+      CREAT_DON >= 3.0 ~ "Severe dysfunction (≥3.0 mg/dL)"
+    ) %>% factor(levels = c("Normal (<1.2 mg/dL)", "Mild dysfunction (1.2-1.9 mg/dL)", 
+                            "Moderate dysfunction (2.0-2.9 mg/dL)", "Severe dysfunction (≥3.0 mg/dL)")),
+    
+    DEATH_MECH_DON_collapsed = case_when(
+      is.na(DEATH_MECH_DON) ~ "Unknown",
+      DEATH_MECH_DON %in% c("1") ~ "Anoxia",
+      DEATH_MECH_DON %in% c("2") ~ "CVA",
+      DEATH_MECH_DON %in% c("3") ~ "Head trauma",
+      TRUE ~ "Other"
+    ) %>% factor(levels = c("Anoxia", "CVA", "Head trauma", "Other", "Unknown")),
+    
+    DEATH_CIRCUM_DON_collapsed = case_when(
+      is.na(DEATH_CIRCUM_DON) ~ "Unknown",
+      DEATH_CIRCUM_DON %in% c("1") ~ "MVA",
+      DEATH_CIRCUM_DON %in% c("2") ~ "Suicide",
+      DEATH_CIRCUM_DON %in% c("3") ~ "Homicide",
+      DEATH_CIRCUM_DON %in% c("4") ~ "Child abuse",
+      DEATH_CIRCUM_DON %in% c("5") ~ "Accident, Non-MVA",
+      DEATH_CIRCUM_DON %in% c("6") ~ "Natural causes",
+      DEATH_CIRCUM_DON %in% c("997") ~ "Other",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("MVA", "Suicide", "Homicide", "Child abuse", 
+                            "Accident, Non-MVA", "Natural causes", "Other", "Unknown")),
+    
+    AGE_DON_binned = case_when(
+      AGE_DON_donor < 40 ~ "<40",
+      AGE_DON_donor >= 40 & AGE_DON_donor < 50 ~ "40-49",
+      AGE_DON_donor >= 50 & AGE_DON_donor < 60 ~ "50-59",
+      AGE_DON_donor >= 60 & AGE_DON_donor < 70 ~ "60-69",
+      AGE_DON_donor >= 70 ~ "≥70"
+    ) %>% factor(levels = c("<40", "40-49", "50-59", "60-69", "≥70")),
+    
+    AGE_binned = case_when(
+      AGE < 40 ~ "<40",
+      AGE >= 40 & AGE < 50 ~ "40-49",
+      AGE >= 50 & AGE < 60 ~ "50-59",
+      AGE >= 60 & AGE < 70 ~ "60-69",
+      AGE >= 70 ~ "≥70"
+    ) %>% factor(levels = c("<40", "40-49", "50-59", "60-69", "≥70")),
+    
+    donation_type = case_when(
+      NON_HRT_DON_donor %in% c("Y", "YES", "1", "TRUE") ~ "DCD",
+      NON_HRT_DON_donor %in% c("N", "NO", "0", "FALSE") ~ "DBD",
+      TRUE ~ NA_character_
+    ) %>% factor(levels = c("DBD", "DCD")),
+    
+    pre_clamp_hours = ifelse(diff_final_clamp < 0, abs(diff_final_clamp), 0),
+    post_clamp_hours = ifelse(diff_final_clamp > 0, diff_final_clamp, 0),
+    
+    HCV_NAT_DON = factor(HCV_NAT_DON, levels = c("N", "P")),
+    HEP_C_ANTI_DON = factor(HEP_C_ANTI_DON, levels = c("N", "P")),
+    CDC_RISK_HIV_DON = factor(CDC_RISK_HIV_DON, levels = c("N", "Y")),
+    HBV_CORE_DON = factor(HBV_CORE_DON, levels = c("N", "P")),
+    
+    ASCITES_TX = factor(ASCITES_TX),
+    ENCEPH_TX = factor(ENCEPH_TX),
+    DIAB = factor(DIAB),
+    GENDER = factor(GENDER),
+    ETHCAT = factor(ETHCAT),
+    
+    TX_YEAR = as.numeric(format(TX_DATE, "%Y")),
+    
+    seq_flag = relevel(factor(seq_flag), ref = "<50 sequence")
+  ) %>%
+  select(
+    seq_flag, TX_YEAR, AGE_DON_binned, BMI_DON_CALC_donor, 
+    SGOT_DON_binned, SGPT_DON_binned, TBILI_DON_binned, CREAT_DON_binned,
+    donation_type, DRI, DSRI,
+    HCV_NAT_DON, HEP_C_ANTI_DON, CDC_RISK_HIV_DON, HBV_CORE_DON,
+    MACRO_FAT_LI_DON_binned, LI_FIBROSIS_collapsed, 
+    DEATH_CIRCUM_DON_collapsed, DEATH_MECH_DON_collapsed,
+    GENDER_DON_donor, ABO_DON, ALCOHOL_HEAVY_DON_donor,
+    CLIN_INFECT_DON, HIST_DIABETES_DON, HIST_HYPERTENS_DON,
+    HIST_CANCER_DON, HIST_CAD, SODIUM170_VAL_DON, BLOOD_INF_DON,
+    AGE_binned, GENDER, ETHCAT, BMI_CALC, MELD_PELD_ADJ,
+    ASCITES_TX, ENCEPH_TX, DIAB, DAYSWAIT_CHRON,
+    pre_clamp_hours, post_clamp_hours,
+    OPO_CTR_CODE, LISTING_CTR_CODE
+  )
+
+# track exclusions step by step
+temp <- multinom_data
+
+temp <- temp %>% filter(!is.na(AGE_DON_binned) & !is.na(BMI_DON_CALC_donor))
+exclusion_tracker <- add_row(exclusion_tracker,
+  step = "Missing donor age/BMI",
+  n_excluded = starting_n - nrow(temp),
+  n_remaining = nrow(temp),
+  reason = "Donor age or BMI missing"
+)
+
+n_before <- nrow(temp)
+temp <- temp %>% filter(!is.na(SGOT_DON_binned) & !is.na(SGPT_DON_binned))
+exclusion_tracker <- add_row(exclusion_tracker,
+  step = "Missing AST/ALT",
+  n_excluded = n_before - nrow(temp),
+  n_remaining = nrow(temp),
+  reason = "Donor liver enzymes missing"
+)
+
+n_before <- nrow(temp)
+temp <- temp %>% filter(!is.na(TBILI_DON_binned) & !is.na(CREAT_DON_binned))
+exclusion_tracker <- add_row(exclusion_tracker,
+  step = "Missing bilirubin/creatinine",
+  n_excluded = n_before - nrow(temp),
+  n_remaining = nrow(temp),
+  reason = "Donor labs missing"
+)
+
+n_before <- nrow(temp)
+temp <- temp %>% filter(!is.na(donation_type) & !is.na(DRI) & !is.na(DSRI))
+exclusion_tracker <- add_row(exclusion_tracker,
+  step = "Missing donation type/DRI/DSRI",
+  n_excluded = n_before - nrow(temp),
+  n_remaining = nrow(temp),
+  reason = "Missing donation type or risk indices"
+)
+
+n_before <- nrow(temp)
+temp <- temp %>% filter(
+  HCV_NAT_DON %in% c("N", "P"),
+  HEP_C_ANTI_DON %in% c("N", "P"),
+  CDC_RISK_HIV_DON %in% c("N", "Y"),
+  HBV_CORE_DON %in% c("N", "P")
+)
+exclusion_tracker <- add_row(exclusion_tracker,
+  step = "Viral serology exclusions",
+  n_excluded = n_before - nrow(temp),
+  n_remaining = nrow(temp),
+  reason = "Missing or invalid viral markers"
+)
+
+n_before <- nrow(temp)
+temp <- temp %>% filter(
+  !is.na(AGE_binned) & !is.na(BMI_CALC) & !is.na(MELD_PELD_ADJ)
+)
+exclusion_tracker <- add_row(exclusion_tracker,
+  step = "Recipient demographics/MELD",
+  n_excluded = n_before - nrow(temp),
+  n_remaining = nrow(temp),
+  reason = "Missing recipient age, BMI, or MELD"
+)
+
+n_before <- nrow(temp)
+temp <- temp %>% filter(!is.na(ASCITES_TX) & !is.na(ENCEPH_TX) & !is.na(DIAB))
+exclusion_tracker <- add_row(exclusion_tracker,
+  step = "Recipient clinical status",
+  n_excluded = n_before - nrow(temp),
+  n_remaining = nrow(temp),
+  reason = "Missing ascites, encephalopathy, or diabetes status"
+)
+
+n_before <- nrow(temp)
+temp <- temp %>% filter(!is.na(pre_clamp_hours) & !is.na(post_clamp_hours))
+exclusion_tracker <- add_row(exclusion_tracker,
+  step = "Timing variables",
+  n_excluded = n_before - nrow(temp),
+  n_remaining = nrow(temp),
+  reason = "Missing timing data"
+)
+
+n_before <- nrow(temp)
+temp <- temp %>% filter(!is.na(OPO_CTR_CODE) & !is.na(LISTING_CTR_CODE))
+exclusion_tracker <- add_row(exclusion_tracker,
+  step = "Institutional variables",
+  n_excluded = n_before - nrow(temp),
+  n_remaining = nrow(temp),
+  reason = "Missing OPO or center codes"
+)
+
+multinom_data <- temp %>% droplevels()
+
+# Print exclusion summary
+cat("\n=== EXCLUSION SUMMARY ===\n")
+cat(sprintf("Starting cohort: %s\n", comma(starting_n)))
+cat(sprintf("Final analysis cohort: %s\n", comma(nrow(multinom_data))))
+cat(sprintf("Total excluded: %s (%.1f%%)\n\n", 
+            comma(starting_n - nrow(multinom_data)),
+            100 * (starting_n - nrow(multinom_data)) / starting_n))
+
+print(exclusion_tracker %>%
+  filter(n_excluded > 0) %>%
+  mutate(
+    n_excluded = comma(n_excluded),
+    n_remaining = comma(n_remaining)
+  ) %>%
+  select(step, n_excluded, n_remaining, reason))
+
+cat("\n=== FINAL COHORT DISTRIBUTION ===\n")
+cat("Total observations:", comma(nrow(multinom_data)), "\n")
+cat("  <50 sequence:", comma(sum(multinom_data$seq_flag == "<50 sequence")), 
+    sprintf("(%.1f%%)\n", 100 * mean(multinom_data$seq_flag == "<50 sequence")))
+cat("  ≥50 sequence:", comma(sum(multinom_data$seq_flag == "≥50 sequence")),
+    sprintf("(%.1f%%)\n", 100 * mean(multinom_data$seq_flag == "≥50 sequence")))
+cat("  AOOS:", comma(sum(multinom_data$seq_flag == "AOOS (out-of-sequence)")),
+    sprintf("(%.1f%%)\n\n", 100 * mean(multinom_data$seq_flag == "AOOS (out-of-sequence)")))
+
+
+# ============================================================================
+# FIT MODEL FOR FIGURE 8
+# ============================================================================
+
+model_clinical <- multinom(
+  seq_flag ~ 
+    TX_YEAR + AGE_DON_binned + BMI_DON_CALC_donor + 
+    SGOT_DON_binned + SGPT_DON_binned + TBILI_DON_binned + CREAT_DON_binned +
+    donation_type + DRI + DSRI +
+    HCV_NAT_DON + HEP_C_ANTI_DON + CDC_RISK_HIV_DON + HBV_CORE_DON +
+    MACRO_FAT_LI_DON_binned + LI_FIBROSIS_collapsed +
+    DEATH_CIRCUM_DON_collapsed + DEATH_MECH_DON_collapsed +
+    GENDER_DON_donor + ABO_DON + ALCOHOL_HEAVY_DON_donor +
+    CLIN_INFECT_DON + HIST_DIABETES_DON + HIST_HYPERTENS_DON +
+    HIST_CANCER_DON + HIST_CAD + SODIUM170_VAL_DON + BLOOD_INF_DON +
+    AGE_binned + GENDER + ETHCAT + BMI_CALC + MELD_PELD_ADJ +
+    ASCITES_TX + ENCEPH_TX + DIAB + DAYSWAIT_CHRON +
+    pre_clamp_hours + post_clamp_hours,
+  data = multinom_data,
+  maxit = 1000,
+  trace = FALSE
+)
+
+coef_matrix <- coef(model_clinical)
+se_matrix <- summary(model_clinical)$standard.errors
+
+dsri_decile <- quantile(multinom_data$DSRI, 0.1, na.rm = TRUE)
+
+increment_map <- c(
+  "BMI_DON_CALC_donor" = 5,
+  "DRI" = 0.5,
+  "DSRI" = dsri_decile,
+  "BMI_CALC" = 5,
+  "MELD_PELD_ADJ" = 5,
+  "DAYSWAIT_CHRON" = 180,
+  "pre_clamp_hours" = 4,
+  "post_clamp_hours" = 0.5
+)
+
+rescale_rrr <- function(coef, se, term) {
+  if (term %in% names(increment_map)) {
+    increment <- increment_map[term]
+    scaled_coef <- coef * increment
+    scaled_se <- se * increment
+  } else {
+    scaled_coef <- coef
+    scaled_se <- se
+  }
+  
+  list(
+    rrr = exp(scaled_coef),
+    rrr_ci_low = exp(scaled_coef - 1.96 * scaled_se),
+    rrr_ci_high = exp(scaled_coef + 1.96 * scaled_se)
+  )
+}
+
+z_matrix <- coef_matrix / se_matrix
+p_matrix <- 2 * (1 - pnorm(abs(z_matrix)))
+
+tidy_gte50 <- tibble(
+  term = rownames(t(coef_matrix)),
+  coefficient = coef_matrix[1, ],
+  se = se_matrix[1, ],
+  z = z_matrix[1, ],
+  p = p_matrix[1, ]
+) %>%
+  filter(term != "(Intercept)") %>%
+  rowwise() %>%
+  mutate(
+    scaled = list(rescale_rrr(coefficient, se, term)),
+    rrr = scaled$rrr,
+    rrr_ci_low = scaled$rrr_ci_low,
+    rrr_ci_high = scaled$rrr_ci_high
+  ) %>%
+  ungroup() %>%
+  select(-scaled) %>%
+  mutate(
+    comparison = "≥50 vs <50 sequence",
+    significant = p < 0.05
+  )
+
+tidy_aoos <- tibble(
+  term = rownames(t(coef_matrix)),
+  coefficient = coef_matrix[2, ],
+  se = se_matrix[2, ],
+  z = z_matrix[2, ],
+  p = p_matrix[2, ]
+) %>%
+  filter(term != "(Intercept)") %>%
+  rowwise() %>%
+  mutate(
+    scaled = list(rescale_rrr(coefficient, se, term)),
+    rrr = scaled$rrr,
+    rrr_ci_low = scaled$rrr_ci_low,
+    rrr_ci_high = scaled$rrr_ci_high
+  ) %>%
+  ungroup() %>%
+  select(-scaled) %>%
+  mutate(
+    comparison = "AOOS vs <50 sequence",
+    significant = p < 0.05
+  )
+
+key_vars <- c(
+  "BMI_DON_CALC_donor", "DRI",
+  "donation_typeDCD", "BMI_CALC", "MELD_PELD_ADJ", 
+  "pre_clamp_hours", "post_clamp_hours"
+)
+
+forest_data <- bind_rows(tidy_gte50, tidy_aoos) %>%
+  filter(term %in% key_vars) %>%
+  mutate(
+    term_label = case_when(
+      term == "BMI_DON_CALC_donor" ~ "Donor BMI (per 5 kg/m²)",
+      term == "DRI" ~ "Donor Risk Index (per 0.5)",
+      term == "donation_typeDCD" ~ "DCD (vs DBD)",
+      term == "BMI_CALC" ~ "Recipient BMI (per 5 kg/m²)",
+      term == "MELD_PELD_ADJ" ~ "MELD score (per 5 points)",
+      term == "pre_clamp_hours" ~ "Pre-clamp hours (per 4 hours)",
+      term == "post_clamp_hours" ~ "Post-clamp time (per 30 minutes)",
+      TRUE ~ term
+    ),
+    term_order = case_when(
+      term == "MELD_PELD_ADJ" ~ 1,
+      term == "donation_typeDCD" ~ 2,
+      term == "DRI" ~ 3,
+      term == "BMI_DON_CALC_donor" ~ 4,
+      term == "BMI_CALC" ~ 5,
+      term == "pre_clamp_hours" ~ 6,
+      term == "post_clamp_hours" ~ 7,
+      TRUE ~ 999
+    )
+  )
+
+categorical_vars <- c(
+  "MACRO_FAT_LI_DON_binned", "LI_FIBROSIS_collapsed", 
+  "AGE_DON_binned", "AGE_binned",
+  "SGOT_DON_binned", "SGPT_DON_binned", "TBILI_DON_binned", "CREAT_DON_binned"
+)
+
+cat_data <- bind_rows(tidy_gte50, tidy_aoos) %>%
+  filter(grepl(paste(categorical_vars, collapse = "|"), term)) %>%
+  mutate(
+    variable_group = case_when(
+      grepl("MACRO_FAT", term) ~ "Donor Macrosteatosis",
+      grepl("LI_FIBROSIS", term) ~ "Donor Fibrosis",
+      grepl("AGE_DON_binned", term) ~ "Donor Age",
+      grepl("^AGE_binned", term) ~ "Recipient Age",
+      grepl("SGOT_DON", term) ~ "Donor AST",
+      grepl("SGPT_DON", term) ~ "Donor ALT",
+      grepl("TBILI_DON", term) ~ "Donor Bilirubin",
+      grepl("CREAT_DON", term) ~ "Donor Creatinine"
+    ),
+    level = case_when(
+      grepl("MACRO_FAT.*10-30", term) ~ "10-30%",
+      grepl("MACRO_FAT.*30-60", term) ~ "30-60%",
+      grepl("MACRO_FAT.*≥60", term) ~ "≥60%",
+      grepl("MACRO_FAT.*Unknown", term) ~ "Unknown",
+      grepl("FIBROSIS.*Mild", term) ~ "Mild",
+      grepl("FIBROSIS.*Moderate", term) ~ "Moderate-Severe",
+      grepl("FIBROSIS.*Unknown", term) ~ "Unknown",
+      grepl("AGE_DON.*40-49", term) ~ "40-49",
+      grepl("AGE_DON.*50-59", term) ~ "50-59",
+      grepl("AGE_DON.*60-69", term) ~ "60-69",
+      grepl("AGE_DON.*≥70", term) ~ "≥70",
+      grepl("^AGE_binned.*40-49", term) ~ "40-49",
+      grepl("^AGE_binned.*50-59", term) ~ "50-59",
+      grepl("^AGE_binned.*60-69", term) ~ "60-69",
+      grepl("^AGE_binned.*≥70", term) ~ "≥70",
+      grepl("SGOT.*Mild", term) ~ "Mild",
+      grepl("SGOT.*Moderate", term) ~ "Moderate",
+      grepl("SGOT.*Severe", term) ~ "Severe",
+      grepl("SGPT.*Mild", term) ~ "Mild",
+      grepl("SGPT.*Moderate", term) ~ "Moderate",
+      grepl("SGPT.*Severe", term) ~ "Severe",
+      grepl("TBILI.*Mild", term) ~ "Mild",
+      grepl("TBILI.*Moderate", term) ~ "Moderate",
+      grepl("TBILI.*Severe", term) ~ "Severe",
+      grepl("CREAT.*Mild", term) ~ "Mild dysfunction",
+      grepl("CREAT.*Moderate", term) ~ "Moderate dysfunction",
+      grepl("CREAT.*Severe", term) ~ "Severe dysfunction",
+      TRUE ~ term
+    ),
+    variable_group = factor(variable_group, 
+                           levels = c("Donor Macrosteatosis", "Donor Fibrosis", 
+                                     "Donor Age", "Recipient Age",
+                                     "Donor AST", "Donor ALT", "Donor Bilirubin", "Donor Creatinine"))
+  )
+
+reference_rows <- expand_grid(
+  variable_group = factor(c("Donor Macrosteatosis", "Donor Fibrosis", 
+                           "Donor Age", "Recipient Age",
+                           "Donor AST", "Donor ALT", "Donor Bilirubin", "Donor Creatinine"),
+                         levels = c("Donor Macrosteatosis", "Donor Fibrosis", 
+                                   "Donor Age", "Recipient Age",
+                                   "Donor AST", "Donor ALT", "Donor Bilirubin", "Donor Creatinine")),
+  comparison = c("≥50 vs <50 sequence", "AOOS vs <50 sequence")
+) %>%
+  mutate(
+    level = case_when(
+      variable_group == "Donor Macrosteatosis" ~ "0-10% (ref)",
+      variable_group == "Donor Fibrosis" ~ "None (ref)",
+      variable_group == "Donor Age" ~ "<40 (ref)",
+      variable_group == "Recipient Age" ~ "<40 (ref)",
+      variable_group == "Donor AST" ~ "Normal (ref)",
+      variable_group == "Donor ALT" ~ "Normal (ref)",
+      variable_group == "Donor Bilirubin" ~ "Normal (ref)",
+      variable_group == "Donor Creatinine" ~ "Normal (ref)"
+    ),
+    rrr = 1.0,
+    rrr_ci_low = 1.0,
+    rrr_ci_high = 1.0
+  )
+
+cat_data_plot <- bind_rows(cat_data, reference_rows) %>%
+  mutate(
+    level_order = case_when(
+      level == "0-10% (ref)" ~ 1,
+      level == "10-30%" ~ 2,
+      level == "30-60%" ~ 3,
+      level == "≥60%" ~ 4,
+      level == "Unknown" & variable_group == "Donor Macrosteatosis" ~ 5,
+      level == "None (ref)" ~ 1,
+      level == "Mild" & variable_group == "Donor Fibrosis" ~ 2,
+      level == "Moderate-Severe" ~ 3,
+      level == "Unknown" & variable_group == "Donor Fibrosis" ~ 4,
+      level == "<40 (ref)" & variable_group == "Donor Age" ~ 1,
+      level == "40-49" & variable_group == "Donor Age" ~ 2,
+      level == "50-59" & variable_group == "Donor Age" ~ 3,
+      level == "60-69" & variable_group == "Donor Age" ~ 4,
+      level == "≥70" & variable_group == "Donor Age" ~ 5,
+      level == "<40 (ref)" & variable_group == "Recipient Age" ~ 1,
+      level == "40-49" & variable_group == "Recipient Age" ~ 2,
+      level == "50-59" & variable_group == "Recipient Age" ~ 3,
+      level == "60-69" & variable_group == "Recipient Age" ~ 4,
+      level == "≥70" & variable_group == "Recipient Age" ~ 5,
+      level == "Normal (ref)" & variable_group == "Donor AST" ~ 1,
+      level == "Mild" & variable_group == "Donor AST" ~ 2,
+      level == "Moderate" & variable_group == "Donor AST" ~ 3,
+      level == "Severe" & variable_group == "Donor AST" ~ 4,
+      level == "Normal (ref)" & variable_group == "Donor ALT" ~ 1,
+      level == "Mild" & variable_group == "Donor ALT" ~ 2,
+      level == "Moderate" & variable_group == "Donor ALT" ~ 3,
+      level == "Severe" & variable_group == "Donor ALT" ~ 4,
+      level == "Normal (ref)" & variable_group == "Donor Bilirubin" ~ 1,
+      level == "Mild" & variable_group == "Donor Bilirubin" ~ 2,
+      level == "Moderate" & variable_group == "Donor Bilirubin" ~ 3,
+      level == "Severe" & variable_group == "Donor Bilirubin" ~ 4,
+      level == "Normal (ref)" & variable_group == "Donor Creatinine" ~ 1,
+      level == "Mild dysfunction" ~ 2,
+      level == "Moderate dysfunction" ~ 3,
+      level == "Severe dysfunction" ~ 4,
+      TRUE ~ 999
+    )
+  ) %>%
+  arrange(variable_group, level_order)
+
+# ============================================================================
+# CREATE TABLES FOR LATER DISPLAY
+# ============================================================================
+
+# Exclusion Summary Table
+exclusion_summary_table <- exclusion_tracker %>%
+  filter(n_excluded > 0) %>%
+  mutate(
+    step_number = row_number(),
+    n_excluded_formatted = comma(n_excluded),
+    n_remaining_formatted = comma(n_remaining),
+    percent_excluded = sprintf("%.1f%%", 100 * n_excluded / starting_n)
+  ) %>%
+  select(
+    `Step` = step_number,
+    `Exclusion Reason` = reason,
+    `N Excluded` = n_excluded_formatted,
+    `N Remaining` = n_remaining_formatted,
+    `% of Original` = percent_excluded
+  )
+
+# Final Cohort Distribution Table
+final_cohort_table <- tibble(
+  `Allocation Group` = c("<50 sequence", "≥50 sequence", "AOOS (out-of-sequence)", "**Total**"),
+  `N` = c(
+    comma(sum(multinom_data$seq_flag == "<50 sequence")),
+    comma(sum(multinom_data$seq_flag == "≥50 sequence")),
+    comma(sum(multinom_data$seq_flag == "AOOS (out-of-sequence)")),
+    comma(nrow(multinom_data))
+  ),
+  `Percentage` = c(
+    sprintf("%.1f%%", 100 * mean(multinom_data$seq_flag == "<50 sequence")),
+    sprintf("%.1f%%", 100 * mean(multinom_data$seq_flag == "≥50 sequence")),
+    sprintf("%.1f%%", 100 * mean(multinom_data$seq_flag == "AOOS (out-of-sequence)")),
+    "100.0%"
+  )
+)
+```
+
+
+```{r fig8-panel-a, fig.width=9, fig.height=6}
+pA <- ggplot(forest_data, aes(x = rrr, y = reorder(term_label, -term_order), color = comparison)) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "gray50") +
+  geom_point(position = position_dodge(width = 0.6), size = 3) +
+  geom_errorbarh(
+    aes(xmin = rrr_ci_low, xmax = rrr_ci_high),
+    position = position_dodge(width = 0.6),
+    height = 0.3,
+    linewidth = 0.8
+  ) +
+  scale_x_log10(
+    breaks = c(0.3, 0.5, 0.7, 1.0, 1.5, 2.0),
+    labels = c("0.3", "0.5", "0.7", "1.0", "1.5", "2.0")
+  ) +
+  scale_color_manual(
+    values = c("≥50 vs <50 sequence" = "#ED0000", 
+               "AOOS vs <50 sequence" = "#42B540"),
+    name = ""
+  ) +
+  labs(
+    title = "A. Continuous Predictors",
+    x = "Relative Risk Ratio (log scale)",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12, base_family = "Arial") +
+  theme(
+    legend.position = "bottom",
+    panel.grid.major.y = element_line(color = "gray90"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 12),
+    axis.text.y = element_text(size = 11)
+  )
+```
+
+```{r fig8-panel-b, fig.width=14, fig.height=7}
+pB <- ggplot(cat_data_plot, aes(x = rrr, y = reorder(level, -level_order), color = comparison)) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "gray50", linewidth = 0.8) +
+  geom_point(position = position_dodge(width = 0.5), size = 2) +
+  geom_errorbarh(
+    aes(xmin = rrr_ci_low, xmax = rrr_ci_high),
+    position = position_dodge(width = 0.5),
+    height = 0.3,
+    linewidth = 0.6
+  ) +
+  facet_wrap(~variable_group, scales = "free_y", ncol = 4) +
+  scale_x_log10(
+    breaks = c(0.5, 1.0, 2.0, 3.0),
+    labels = c("0.5", "1.0", "2.0", "3.0")
+  ) +
+  scale_color_manual(
+    values = c("≥50 vs <50 sequence" = "#ED0000", 
+               "AOOS vs <50 sequence" = "#42B540"),
+    name = ""
+  ) +
+  labs(
+    title = "B. Categorical Predictors",
+    x = "Relative Risk Ratio (log scale)",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 11, base_family = "Arial") +
+  theme(
+    legend.position = "bottom",
+    panel.grid.major.y = element_line(color = "gray90"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 12),
+    strip.text = element_text(face = "bold", size = 10),
+    axis.text.y = element_text(size = 8),
+    axis.text.x = element_text(size = 9)
+  )
+
+pA
+pB
+```
+
+**Figure 8. Forest plots showing predictors of allocation pattern from multinomial logistic regression.** (A) Continuous variables: relative risk ratios for key continuous predictors scaled to clinically meaningful increments. (B) Categorical variables: relative risk ratios for donor and recipient characteristics with reference categories shown at RRR=1.0. Error bars represent 95% confidence intervals. N = `r comma(nrow(multinom_data))` cases with complete data.
+```{r, results='asis'}
+page_break()
+```
+
+---
+
+# SUPPLEMENT
+
+## Table S1: Survival Outcomes by Donor Type and Sequence Group
+
+```{r tableS1-survival-stats}
+extract_surv_stats <- function(fit, data, time_var, status_var, times = c(1, 3, 5)) {
+  ne <- data %>%
+    count(seq_flag, name = "n") %>%
+    left_join(
+      data %>%
+        group_by(seq_flag) %>%
+        summarise(events = sum(.data[[status_var]] == 1, na.rm = TRUE), .groups = "drop"),
+      by = "seq_flag"
+    )
+  
+  s <- summary(fit, times = times)
+  surv_at_times <- tibble(
+    seq_flag = sub("^seq_flag=", "", s$strata),
+    time = s$time,
+    surv = s$surv,
+    lower = s$lower,
+    upper = s$upper
+  ) %>%
+    mutate(
+      surv_ci = sprintf("%.1f%% (%.1f–%.1f%%)", surv*100, lower*100, upper*100)
+    ) %>%
+    select(seq_flag, time, surv_ci) %>%
+    pivot_wider(names_from = time, values_from = surv_ci, names_prefix = "yr_")
+  
+  lr <- survdiff(reformulate("seq_flag", response = paste0("Surv(", time_var, ", ", status_var, ")")), data = data)
+  lr_p <- 1 - pchisq(lr$chisq, df = length(lr$n) - 1)
+  
+  list(
+    ne = ne,
+    surv_at_times = surv_at_times,
+    logrank_p = lr_p
+  )
+}
+
+stats_patient_dcd <- extract_surv_stats(fit_patient_dcd, surv_dcd, "PTIME_yrs", "PSTATUS")
+stats_graft_dcd <- extract_surv_stats(fit_graft_dcd, surv_dcd, "GTIME_yrs", "GSTATUS")
+stats_patient_dbd <- extract_surv_stats(fit_patient_dbd, surv_dbd, "PTIME_yrs", "PSTATUS")
+stats_graft_dbd <- extract_surv_stats(fit_graft_dbd, surv_dbd, "GTIME_yrs", "GSTATUS")
+
+make_surv_table <- function(stats, label) {
+  stats$ne %>%
+    left_join(stats$surv_at_times, by = "seq_flag") %>%
+    mutate(comparison = label) %>%
+    select(comparison, seq_flag, n, events, yr_1, yr_3, yr_5)
+}
+
+surv_summary_df <- bind_rows(
+  make_surv_table(stats_patient_dcd, "DCD Patient"),
+  make_surv_table(stats_graft_dcd, "DCD Graft"),
+  make_surv_table(stats_patient_dbd, "DBD Patient"),
+  make_surv_table(stats_graft_dbd, "DBD Graft")
+)
+
+surv_summary_table <- surv_summary_df %>%
+  gt() %>%
+  tab_header(
+    title = "Table S1. Survival Outcomes by Donor Type and Sequence Group",
+    subtitle = "1-, 3-, and 5-year survival (95% CI)"
+  ) %>%
+  cols_label(
+    comparison = "Outcome",
+    seq_flag   = "Sequence",
+    n          = "N",
+    events     = "Events",
+    yr_1       = "1-yr",
+    yr_3       = "3-yr",
+    yr_5       = "5-yr"
+  ) %>%
+  tab_style(style = cell_text(weight = "bold", size = px(8)), locations = cells_column_labels()) %>%
+  tab_style(style = cell_text(size = px(8)), locations = cells_body()) %>%
+  tab_options(
+    table.font.names = "Arial",
+    table.font.size  = px(8),
+    table.width      = pct(100),        
+    data_row.padding = px(1),            
+    column_labels.padding = px(2)
+  ) %>%
+  cols_width(
+    comparison ~ px(85),
+    seq_flag   ~ px(110),
+    n          ~ px(40),
+    events     ~ px(55),
+    yr_1       ~ px(95),
+    yr_3       ~ px(95),
+    yr_5       ~ px(95)
+  )
+
+render_tbl(surv_summary_table)
+
+```
+
+**Table S1** Comparing the 1-,3-,5- year patient and graft survival for DCD/DBD patients in the three allocation pathways (<50 sequence, ≥50 sequence and AOOS). This table contain the specific percentages associated with the Kaplan Meier curve in Figure 6.
+
+```{r, results='asis'}
+page_break()
+```
+## Table S2: Proportional Hazards Testing (Based on Schoenfeld residuals test)
+```{r tableS2-ph-test}
+cox_patient_dcd <- coxph(Surv(PTIME_yrs, PSTATUS) ~ seq_flag, data = surv_dcd)
+cox_graft_dcd <- coxph(Surv(GTIME_yrs, GSTATUS) ~ seq_flag, data = surv_dcd)
+cox_patient_dbd <- coxph(Surv(PTIME_yrs, PSTATUS) ~ seq_flag, data = surv_dbd)
+cox_graft_dbd <- coxph(Surv(GTIME_yrs, GSTATUS) ~ seq_flag, data = surv_dbd)
+
+ph_patient_dcd <- cox.zph(cox_patient_dcd)
+ph_graft_dcd <- cox.zph(cox_graft_dcd)
+ph_patient_dbd <- cox.zph(cox_patient_dbd)
+ph_graft_dbd <- cox.zph(cox_graft_dbd)
+
+ph_summary <- tibble(
+  Comparison = c("DCD Patient", "DCD Graft", "DBD Patient", "DBD Graft"),
+  `Global p-value` = c(
+    ph_patient_dcd$table["GLOBAL", "p"],
+    ph_graft_dcd$table["GLOBAL", "p"],
+    ph_patient_dbd$table["GLOBAL", "p"],
+    ph_graft_dbd$table["GLOBAL", "p"]
+  ),
+  `PH Assumption` = ifelse(`Global p-value` > 0.05, "Met (p>0.05)", "Violated (p≤0.05)")
+) %>%
+  mutate(`Global p-value` = sprintf("%.4f", `Global p-value`))
+
+# Store the gt table in a variable
+ph_table <- ph_summary %>%
+  gt() %>%
+  tab_header(
+    title = "Table S2. Proportional Hazards Assumption Testing",
+    subtitle = "Schoenfeld residuals test for each comparison"
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#FFE6E6"),
+    locations = cells_body(
+      columns = `PH Assumption`,
+      rows = str_detect(`PH Assumption`, "Violated")
+    )
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold", size = px(12)),
+    locations = cells_column_labels()
+  ) %>%
+  tab_style(
+    style = cell_text(size = px(12)),
+    locations = cells_body()
+  ) %>%
+  tab_options(
+    table.font.names = "Arial",
+    table.font.size = px(12)
+  ) %>%
+  tab_footnote(
+    footnote = "Based on Schoenfeld residuals test. PH assumption is considered met if global p>0.05.",
+    locations = cells_column_labels(columns = `PH Assumption`)
+  )
+
+# Pass the gt object to render_tbl
+render_tbl(ph_table)
+```
+
+**Table S2.** Proportional Hazards testing for the application of Cox proportional hazards modelling on survival data or Restricted Mean Survival Time. See tables S3 and S4 respectively based on violated assumptions.
+
+```{r, results='asis'}
+page_break()
+```
+## Table S3: Cox Proportional Hazards Models
+
+```{r tableS3-cox-models}
+format_p <- function(p) {
+  case_when(
+    p < 0.001 ~ "<0.001",
+    p < 0.01 ~ sprintf("%.3f", p),
+    TRUE ~ sprintf("%.2f", p)
+  )
+}
+
+format_cox <- function(model, label) {
+  broom::tidy(model, exponentiate = TRUE, conf.int = TRUE) %>%
+    mutate(
+      comparison = label,
+      hr_ci = sprintf("%.2f (%.2f–%.2f)", estimate, conf.low, conf.high),
+      p_formatted = format_p(p.value)
+    ) %>%
+    select(comparison, term, hr_ci, p_formatted)
+}
+
+cox_table <- bind_rows(
+  format_cox(cox_patient_dcd, "DCD Patient"),
+  format_cox(cox_graft_dcd, "DCD Graft"),
+  format_cox(cox_patient_dbd, "DBD Patient"),
+  format_cox(cox_graft_dbd, "DBD Graft")
+) %>%
+  mutate(term = str_remove(term, "seq_flag")) %>%
+  gt() %>%
+  tab_header(
+    title = "Table S3. Unadjusted Hazard Ratios by Sequence Group",
+    subtitle = "Reference: <50 sequence"
+  ) %>%
+  cols_label(
+    comparison = "Outcome",
+    term = "Group",
+    hr_ci = "HR (95% CI)",
+    p_formatted = "P-value"
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold", size = px(12)),
+    locations = cells_column_labels()
+  ) %>%
+  tab_style(
+    style = cell_text(size = px(12)),
+    locations = cells_body()
+  ) %>%
+  tab_options(
+    table.font.names = "Arial",
+    table.font.size = px(12)
+  )
+
+render_tbl(cox_table)
+```
+
+**Table S3.** Cox proportional hazards modelling of survival data for DCD and DBD patient & graft survival expressing Hazard ratios with 95% confidence intervals and p-values. Note DBD graft & patient violated PH assumptions and so RMST are reported in table S4. DCD graft survival in AOOS was the only significant hazard ratio of 1.21, p=0.02 for increased hazard of graft failure relative to <50 sequence.
+
+```{r, results='asis'}
+page_break()
+```
+
+## Table S4: Restricted Mean Survival Time 
+
+```{r-table_s4_rmst}
+
+library(survRM2)
+
+# Function to extract key RMST results
+extract_rmst_summary <- function(data, time_var, status_var, tau = 5) {
+  
+  # Predefine empty results table with consistent column types
+  results <- data.frame(
+    Comparison = character(),
+    RMST_Diff = numeric(),
+    CI_Lower = numeric(),
+    CI_Upper = numeric(),
+    P_Value = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through comparison groups
+  for (grp in c("≥50 sequence", "AOOS (out-of-sequence)")) {
+    comp_data <- data %>% 
+      filter(seq_flag %in% c("<50 sequence", grp)) %>%
+      filter(!is.na(.data[[time_var]]), !is.na(.data[[status_var]])) %>%
+      mutate(arm = as.numeric(seq_flag != "<50 sequence"))
+    
+    # Skip if group too small or identical
+    if (nrow(comp_data) == 0 || length(unique(comp_data$arm)) < 2) next
+    
+    tryCatch({
+      rmst_obj <- rmst2(
+        time = comp_data[[time_var]],
+        status = comp_data[[status_var]],
+        arm = comp_data$arm,
+        tau = tau
+      )
+      
+      # Extract numeric values
+      diff <- as.numeric(rmst_obj$unadjusted.result[1, c("Est.", "lower .95", "upper .95", "p")])
+      
+      results <- rbind(
+        results,
+        data.frame(
+          Comparison = grp,
+          RMST_Diff = round(diff[1], 3),
+          CI_Lower   = round(diff[2], 3),
+          CI_Upper   = round(diff[3], 3),
+          P_Value    = round(diff[4], 3),
+          stringsAsFactors = FALSE
+        )
+      )
+      
+    }, error = function(e) NULL)
+  }
+  
+  return(results)
+}
+
+
+# Check for PH violations
+ph_violated <- c(
+  dcd_patient = ph_patient_dcd$table["GLOBAL", "p"] <= 0.05,
+  dcd_graft = ph_graft_dcd$table["GLOBAL", "p"] <= 0.05,
+  dbd_patient = ph_patient_dbd$table["GLOBAL", "p"] <= 0.05,
+  dbd_graft = ph_graft_dbd$table["GLOBAL", "p"] <= 0.05
+)
+
+if (any(ph_violated)) {
+  
+  # Create results frame
+  rmst_summary <- data.frame()
+  
+  if (ph_violated["dbd_patient"]) {
+    temp <- extract_rmst_summary(surv_dbd, "PTIME_yrs", "PSTATUS", tau = 5)
+    temp$Outcome <- "DBD Patient Survival"
+    rmst_summary <- rbind(rmst_summary, temp)
+  }
+  
+  if (ph_violated["dbd_graft"]) {
+    temp <- extract_rmst_summary(surv_dbd, "GTIME_yrs", "GSTATUS", tau = 5)
+    temp$Outcome <- "DBD Graft Survival"
+    rmst_summary <- rbind(rmst_summary, temp)
+  }
+  
+  if (ph_violated["dcd_patient"]) {
+    temp <- extract_rmst_summary(surv_dcd, "PTIME_yrs", "PSTATUS", tau = 5)
+    temp$Outcome <- "DCD Patient Survival"
+    rmst_summary <- rbind(rmst_summary, temp)
+  }
+  
+  if (ph_violated["dcd_graft"]) {
+    temp <- extract_rmst_summary(surv_dcd, "GTIME_yrs", "GSTATUS", tau = 5)
+    temp$Outcome <- "DCD Graft Survival"
+    rmst_summary <- rbind(rmst_summary, temp)
+  }
+  
+  # Reorder columns
+  rmst_summary <- rmst_summary[, c("Outcome", "Comparison", "RMST_Diff", "CI_Lower", "CI_Upper", "P_Value")]
+  
+  # Print table
+  knitr::kable(
+    rmst_summary, 
+    col.names = c("Outcome", "Comparison", "RMST Difference (years)", "95% CI Lower", "95% CI Upper", "P-value"),
+    caption = "Restricted Mean Survival Time Differences (τ = 5 years)",
+    digits = 3
+  )
+
+} else {
+  # Add message if none violated
+  message("PH assumption met for all models – RMST not required.")
+}
+
+```
+
+**Table S4.** For analyses where proportional hazards was violated, RMST differences are presented = average survival time up to 5 years. Positive values favor the comparison group. No significant differences between survival groups for DBD patient and graft survival noted.
+
+```{r, results='asis'}
+page_break()
+```
+
+## Figure S1: Patient Survival by Cross-Clamp Timing
+
+```{r figS1-patient-xc, fig.width=12, fig.height=14}
+fit_p_dcd_oos <- survfit(Surv(PTIME_1yr, PSTATUS_1yr) ~ clamp_timing, data = dcd_oos)
+fit_p_dbd_oos <- survfit(Surv(PTIME_1yr, PSTATUS_1yr) ~ clamp_timing, data = dbd_oos)
+fit_p_dcd_seq <- survfit(Surv(PTIME_1yr, PSTATUS_1yr) ~ clamp_timing, data = dcd_seq)
+fit_p_dbd_seq <- survfit(Surv(PTIME_1yr, PSTATUS_1yr) ~ clamp_timing, data = dbd_seq)
+
+p1_p <- ggsurvplot(
+  fit_p_dcd_oos, data = dcd_oos,
+  title = "A. DCD AOOS - Patient",
+  xlim = c(0, 1), ylim = c(0.80, 1), break.time.by = 0.25,
+  xlab = "Years since transplant",
+  ylab = "Patient survival probability",
+  legend.title = "Response timing",
+  legend.labs = c("Pre cross-clamp", "Post cross-clamp"),
+  palette = clamp_cols,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.05, 0.85),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_classic(base_size = 12, base_family = "Arial")
+)
+
+p2_p <- ggsurvplot(
+  fit_p_dbd_oos, data = dbd_oos,
+  title = "B. DBD AOOS - Patient",
+  xlim = c(0, 1), ylim = c(0.80, 1), break.time.by = 0.25,
+  xlab = "Years since transplant",
+  ylab = "Patient survival probability",
+  legend.title = "Response timing",
+  legend.labs = c("Pre cross-clamp", "Post cross-clamp"),
+  palette = clamp_cols,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.05, 0.85),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_classic(base_size = 12, base_family = "Arial")
+)
+
+p3_p <- ggsurvplot(
+  fit_p_dcd_seq, data = dcd_seq,
+  title = "C. DCD Sequential - Patient",
+  xlim = c(0, 1), ylim = c(0.80, 1), break.time.by = 0.25,
+  xlab = "Years since transplant",
+  ylab = "Patient survival probability",
+  legend.title = "Response timing",
+  legend.labs = c("Pre cross-clamp", "Post cross-clamp"),
+  palette = clamp_cols,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.05, 0.85),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_classic(base_size = 12, base_family = "Arial")
+)
+
+p4_p <- ggsurvplot(
+  fit_p_dbd_seq, data = dbd_seq,
+  title = "D. DBD Sequential - Patient",
+  xlim = c(0, 1), ylim = c(0.80, 1), break.time.by = 0.25,
+  xlab = "Years since transplant",
+  ylab = "Patient survival probability",
+  legend.title = "Response timing",
+  legend.labs = c("Pre cross-clamp", "Post cross-clamp"),
+  palette = clamp_cols,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  pval = TRUE,
+  pval.coord = c(0.05, 0.85),
+  risk.table.fontsize = 3,
+  risk.table.y.text.col = TRUE,
+  tables.theme = theme_void(),
+  ggtheme = theme_classic(base_size = 12, base_family = "Arial")
+)
+
+combined_patient <- arrange_ggsurvplots(
+  list(p1_p, p2_p, p3_p, p4_p),
+  ncol = 2, nrow = 2,
+  print = TRUE
+)
+```
+
+**Figure S1. Patient survival by cross-clamp timing.** Kaplan-Meier curves comparing 1-year patient survival for cases where final acceptance occurred before versus after donor cross-clamp, stratified by donor type (DCD/DBD) and allocation pattern (AOOS/Sequential). All cases censored at 1 year.
+
+```{r, results='asis'}
+page_break()
+```
+
+## Table S5: Graft Survival Statistics by Cross-Clamp Timing
+
+```{r tableS5-graft-xc-stats}
+p_logrank <- function(dat, time_var, status_var) {
+  sd <- survdiff(reformulate("clamp_timing", response = paste0("Surv(", time_var, ", ", status_var, ")")), data = dat)
+  df <- length(sd$n) - 1
+  1 - pchisq(sd$chisq, df = df)
+}
+show_km <- function(fit, label) {
+  s <- summary(fit, times = c(0.25, 0.5, 0.75, 1))
+  tibble(
+    Group = sub("^clamp_timing=", "", s$strata),
+    Time = s$time,
+    Survival = sprintf("%.1f%%", s$surv * 100),
+    `95% CI` = sprintf("%.1f–%.1f%%", s$lower * 100, s$upper * 100)
+  ) %>%
+    pivot_wider(
+      names_from = Time,
+      values_from = c(Survival, `95% CI`),
+      names_glue = "{.value} {Time*12} mo"
+    ) %>%
+    mutate(Comparison = label, .before = 1)
+}
+graft_stats <- bind_rows(
+  show_km(fit_g_dcd_oos, "DCD AOOS Graft"),
+  show_km(fit_g_dbd_oos, "DBD AOOS Graft"),
+  show_km(fit_g_dcd_seq, "DCD Sequential Graft"),
+  show_km(fit_g_dbd_seq, "DBD Sequential Graft")
+) %>%
+  mutate(`Log-rank p` = c(
+    rep(sprintf("%.4f", p_logrank(dcd_oos, "GTIME_1yr", "GSTATUS_1yr")), 2),
+    rep(sprintf("%.4f", p_logrank(dbd_oos, "GTIME_1yr", "GSTATUS_1yr")), 2),
+    rep(sprintf("%.4f", p_logrank(dcd_seq, "GTIME_1yr", "GSTATUS_1yr")), 2),
+    rep(sprintf("%.4f", p_logrank(dbd_seq, "GTIME_1yr", "GSTATUS_1yr")), 2)
+  ))
+
+render_tbl(graft_stats)
+```
+
+**Table S5**.  Graft survival percentages pre- and post- cross-clamp with 95% confidence intervals at 3-month, 6-month, 9-month and 12-months respectively with log-rank p values. Data presented for AOOS and sequential allocation pathways.
+
+```{r, results='asis'}
+page_break()
+```
+
+## Table S6: Patient Survival Statistics by Cross-Clamp Timing
+
+```{r tableS6-patient-xc-stats}
+patient_stats <- bind_rows(
+  show_km(fit_p_dcd_oos, "DCD AOOS Patient"),
+  show_km(fit_p_dbd_oos, "DBD AOOS Patient"),
+  show_km(fit_p_dcd_seq, "DCD Sequential Patient"),
+  show_km(fit_p_dbd_seq, "DBD Sequential Patient")
+) %>%
+  mutate(`Log-rank p` = c(
+    rep(sprintf("%.4f", p_logrank(dcd_oos, "PTIME_1yr", "PSTATUS_1yr")), 2),
+    rep(sprintf("%.4f", p_logrank(dbd_oos, "PTIME_1yr", "PSTATUS_1yr")), 2),
+    rep(sprintf("%.4f", p_logrank(dcd_seq, "PTIME_1yr", "PSTATUS_1yr")), 2),
+    rep(sprintf("%.4f", p_logrank(dbd_seq, "PTIME_1yr", "PSTATUS_1yr")), 2)
+  ))
+
+render_tbl(patient_stats)
+```
+
+**Table S6**.  Patient survival percentages pre- and post- cross-clamp with 95% confidence intervals at 3-month, 6-month, 9-month and 12-months respectively with log-rank p values. Data presented for AOOS and sequential allocation pathways.
+```{r, results='asis'}
+page_break()
+```
+
+## Table S7: Reference Categories for Multinomial Logistic Regression (Model A&B)
+
+```{r reference-categories-table}
+
+# Create reference categories table
+reference_categories <- tibble(
+  Variable = c(
+    "Outcome (dependent variable)",
+    "Donor age",
+    "Recipient age",
+    "Donation type",
+    "Donor macrosteatosis",
+    "Liver fibrosis",
+    "Donor AST",
+    "Donor ALT",
+    "Donor bilirubin",
+    "Donor creatinine",
+    "Death mechanism",
+    "Death circumstances",
+    "Donor gender",
+    "Recipient gender",
+    "Donor ABO blood type",
+    "Donor heavy alcohol use",
+    "Donor clinical infection",
+    "Donor history of diabetes",
+    "Donor history of hypertension",
+    "Donor history of cancer",
+    "Donor history of CAD",
+    "Donor HCV NAT",
+    "Donor HCV antibody",
+    "Donor CDC HIV risk",
+    "Donor HBV core antibody",
+    "Recipient ethnicity",
+    "Recipient ascites",
+    "Recipient encephalopathy",
+    "Recipient diabetes"
+  ),
+  `Reference Category` = c(
+    "<50 sequence",
+    "<40 years",
+    "<40 years",
+    "DBD (donation after brain death)",
+    "0-10%",
+    "None",
+    "Normal (<100 U/L)",
+    "Normal (<100 U/L)",
+    "Normal (<1.5 mg/dL)",
+    "Normal (<1.2 mg/dL)",
+    "Anoxia (1)",
+    "MVA (motor vehicle accident) (1)",
+    "Female (F)",
+    "Female (F)",
+    "O",
+    "No (N)",
+    "No (N)",
+    "No (1)",
+    "No (1)",
+    "No (N)",
+    "No (N)",
+    "Negative (N)",
+    "Negative (N)",
+    "No (N)",
+    "Negative (N)",
+    "White, Non-Hispanic (1)",
+    "Absent (1)",
+    "None (1)",
+    "No (1)"
+  ),
+  `All Categories with Codes` = c(
+    "<50 sequence, ≥50 sequence, AOOS (out-of-sequence)",
+    "<40, 40-49, 50-59, 60-69, ≥70 years",
+    "<40, 40-49, 50-59, 60-69, ≥70 years",
+    "DBD, DCD",
+    "0-10%, 10-30%, 30-60%, ≥60%, Unknown",
+    "None, Mild, Moderate-Severe, Unknown",
+    "Normal (<100 U/L), Mild (100-499 U/L), Moderate (500-999 U/L), Severe (≥1000 U/L)",
+    "Normal (<100 U/L), Mild (100-499 U/L), Moderate (500-999 U/L), Severe (≥1000 U/L)",
+    "Normal (<1.5 mg/dL), Mild (1.5-2.9 mg/dL), Moderate (3.0-4.9 mg/dL), Severe (≥5.0 mg/dL)",
+    "Normal (<1.2 mg/dL), Mild dysfunction (1.2-1.9 mg/dL), Moderate dysfunction (2.0-2.9 mg/dL), Severe dysfunction (≥3.0 mg/dL)",
+    "Anoxia (1), CVA (2), Head trauma (3), Other, Unknown",
+    "MVA (1), Suicide (2), Homicide (3), Child abuse (4), Accident Non-MVA (5), Natural causes (6), Other (997), Unknown",
+    "F = Female, M = Male",
+    "F = Female, M = Male",
+    "O, A, B, AB, A1, A2, A1B, A2B",
+    "N = No, U = Unknown, Y = Yes",
+    "N = No, U = Unknown, Y = Yes",
+    "1 = No, 2 = 0-5 years, 3 = 6-10 years, 4 = >10 years, 5 = Duration unknown, 998 = Unknown",
+    "1 = No, U = Unknown, Y = Yes",
+    "N = No, U = Unknown, Y = Yes",
+    "N = No, U = Unknown, Y = Yes",
+    "N = Negative, P = Positive",
+    "N = Negative, P = Positive",
+    "N = No, Y = Yes",
+    "N = Negative, P = Positive",
+    "1 = White (Non-Hispanic), 2 = Black (Non-Hispanic), 4 = Hispanic/Latino, 5 = Asian (Non-Hispanic), 6 = American Indian/Alaska Native (Non-Hispanic), 7 = Native Hawaiian/Pacific Islander (Non-Hispanic), 9 = Multiracial (Non-Hispanic), 998 = Unknown",
+    "1 = Absent, 2 = Slight, 3 = Moderate, 4 = Unknown",
+    "1 = None, 2 = Grade 1-2, 3 = Grade 3-4, 4 = Unknown",
+    "1 = No, 2 = 0-5 years, 3 = 6-10 years, 4 = >10 years, 5 = Duration unknown, 998 = Unknown"
+  )
+)
+
+# Create table
+reference_table <- reference_categories %>%
+  gt() %>%
+  cols_label(
+    Variable = "Variable",
+    `Reference Category` = "Reference Category",
+    `All Categories with Codes` = "All Categories in Model (with numeric codes where applicable)"
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#E8F4F8"),
+    locations = cells_body(rows = Variable == "Outcome (dependent variable)")
+  ) %>%
+  tab_footnote(
+    footnote = "All relative risk ratios (RRRs) are interpreted relative to the reference category. Reference categories are listed first and shown with their codes in parentheses.",
+    locations = cells_column_labels(columns = `Reference Category`)
+  ) %>%
+  tab_footnote(
+    footnote = "The outcome variable has three levels; multinomial regression compares ≥50 sequence and AOOS to the <50 sequence reference.",
+    locations = cells_body(columns = Variable, rows = 1)
+  ) %>%
+  tab_footnote(
+    footnote = "Numeric codes (e.g., ASCITES_TX2) in the regression output correspond to the numbers shown here (e.g., 2 = Slight). For binned laboratory variables (AST, ALT, bilirubin, creatinine), categories are shown with clinical thresholds.",
+    locations = cells_column_labels(columns = `All Categories with Codes`)
+  ) %>%
+  cols_width(
+    Variable ~ px(200),
+    `Reference Category` ~ px(200),
+    `All Categories with Codes` ~ px(500)
+  ) %>%
+  tab_options(
+    table.font.size = 10,
+    data_row.padding = px(4)
+  )
+
+reference_table
+```
+
+```{r, results='asis'}
+page_break()
+```
+
+## Table S8: Reference for Continuous Variables in Multinomial Logistic Regression (Model A&B)
+
+```{r reference-categories-table-continuous}
+
+
+# Continuous variables table
+continuous_vars_table <- tibble(
+  Variable = c(
+    "Transplant year",
+    "Donor BMI",
+    "Donor Risk Index (DRI)",
+    "Discard Risk Index (DSRI)",
+    "Donor sodium",
+    "Donor blood infection score",
+    "Recipient BMI",
+    "Recipient MELD score",
+    "Days on waitlist",
+    "Pre-clamp hours",
+    "Post-clamp time"
+  ),
+  `Unit` = c(
+    "years",
+    "kg/m²",
+    "units",
+    "units",
+    "mEq/L",
+    "score",
+    "kg/m²",
+    "points",
+    "days",
+    "hours",
+    "minutes"
+  ),
+  `Increment Used in Model` = c(
+    "Per 1 year",
+    "Per 5 kg/m²",
+    "Per 0.5 units",
+    "Per decile (0.82 units)",
+    "Per 1 mEq/L",
+    "Per 1 unit",
+    "Per 5 kg/m²",
+    "Per 5 points",
+    "Per 180 days (6 months)",
+    "Per 4 hours",
+    "Per 30 minutes"
+  ),
+  `Clinical Rationale` = c(
+    "Annual trend",
+    "Clinically meaningful BMI change",
+    "Moderate increase in donor risk",
+    "Distribution-based (10th percentile)",
+    "Single unit change",
+    "Single unit change",
+    "Clinically meaningful BMI change",
+    "Meaningful MELD increment",
+    "Approximately 6 months waiting",
+    "Clinically meaningful time window before cross-clamp",
+    "Appropriate window of time post-clamp based on distribution"
+  )
+) %>%
+  gt() %>%
+  cols_label(
+    Variable = "Variable",
+    Unit = "Unit",
+    `Increment Used in Model` = "Increment Used",
+    `Clinical Rationale` = "Rationale"
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) %>%
+  tab_footnote(
+    footnote = "Increments were chosen to reflect clinically meaningful changes rather than per-unit increases to improve interpretability.",
+    locations = cells_column_labels(columns = `Increment Used in Model`)
+  )  %>%
+  cols_width(
+    Variable ~ px(200),
+    Unit ~ px(100),
+    `Increment Used in Model` ~ px(180),
+    `Clinical Rationale` ~ px(300)
+  ) %>%
+  tab_options(
+    table.font.size = 10,
+    data_row.padding = px(4)
+  )
+
+continuous_vars_table
+```
+
+
+```{r, results='asis'}
+page_break()
+```
+
+
+## Table S9: OPO and Listing Center Variables (Model B)
+```{r opo-listing-tables}
+
+
+# Continuous variables table
+opo_listing_table <- tibble(
+  Variable = c("OPO_CTR_CODE", "LISTING_CTR_CODE"),
+  Unit = c("Per OPO unique code", "Per listing center unique code"),
+  Reference = c("OPO 01054", 
+              "Listing Center 07223")) %>%                                
+  gt() %>%
+  cols_label(
+    Variable = "Variable",
+    Unit = "Unit",
+    Reference = "Reference"
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) %>%
+  tab_footnote(
+    footnote = "OPO 01054 (highest volume, n=2,402), Listing Center 07223 (highest volume, n=1,394)",
+    locations = cells_column_labels(columns = Reference)
+  ) %>%
+  cols_width(
+    Variable ~ px(200),
+    Unit ~ px(100)
+  ) %>%
+  tab_options(
+    table.font.size = px(10),          
+    data_row.padding = px(4)
+  )
+
+opo_listing_table
+
+```
+
+**Table S9** OPO and Listing Center Variables introduced as fixed effects into Model B. Reference categories were selected as the highest volume OPO (01054, n=2,402 transplants) and listing center (07223, n=1,394 transplants). The choice of reference category is a reparameterization that does not affect model fit, statistical significance of other variables, or tests of institutional variation. All coefficients for other OPOs and listing centers are interpreted relative to the highest-volume for interpretability purposes.
+
+```{r, results='asis'}
+page_break()
+```
+
+##Table S10: Exclusion Criteria Applied to Timing Cohort for Multinomial Logistic Regression Model
+```{r exclusion and final cohort summary tables}
+library(gt)
+
+exclusion_summary_table %>%
+  gt() %>%
+  cols_align(
+    align = "center",
+    columns = c(Step)
+  ) %>%
+  cols_align(
+    align = "left",
+    columns = `Exclusion Reason`
+  ) %>%
+  cols_align(
+    align = "right",
+    columns = c(`N Excluded`, `N Remaining`, `% of Original`)
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    heading.title.font.size = px(14),
+    heading.subtitle.font.size = px(12),
+    table.border.top.style = "solid",
+    table.border.bottom.style = "solid",
+    column_labels.border.bottom.style = "solid"
+  ) %>%
+  opt_row_striping()
+```
+**Table S10.** Complete cases required for model, exclusion reasons for missing data provided in table.
+
+```{r, results='asis'}
+page_break()
+```
+
+##Table S11: Final Cohort Distribution by Allocation Group for Multinomial Regression Model
+```{r final cohort distribution by allocaiton group}
+final_cohort_table %>%
+  gt()  %>%
+  cols_align(
+    align = "left",
+    columns = `Allocation Group`
+  ) %>%
+  cols_align(
+    align = "right",
+    columns = c(N, Percentage)
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(rows = 4)  # Bold the total row
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    heading.title.font.size = px(14),
+    heading.subtitle.font.size = px(12),
+    table.border.top.style = "solid",
+    table.border.bottom.style = "solid",
+    column_labels.border.bottom.style = "solid"
+  ) %>%
+  opt_row_striping()
+
+```
+**Table S11.** Cohort distribution proportions used in regression model.
+
+
+```{r fit-multinomial-models, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+cat("Fitting Model B: Adding OPO and listing center...\n")
+
+# Set reference categories to highest volume centers
+# OPO: 01054 (2402 cases) - highest volume
+# LISTING: 07223 (1394 cases) - highest volume
+
+multinom_data$OPO_CTR_CODE <- relevel(factor(multinom_data$OPO_CTR_CODE), ref = "01054")
+multinom_data$LISTING_CTR_CODE <- relevel(factor(multinom_data$LISTING_CTR_CODE), ref = "07223")
+
+model_full <- multinom(
+  seq_flag ~ 
+    # Clinical factors (same as above)
+    TX_YEAR + AGE_DON_binned + BMI_DON_CALC_donor + 
+    SGOT_DON_binned + SGPT_DON_binned + TBILI_DON_binned + CREAT_DON_binned +
+    donation_type + DRI + DSRI +
+    HCV_NAT_DON + HEP_C_ANTI_DON + CDC_RISK_HIV_DON + HBV_CORE_DON +
+    MACRO_FAT_LI_DON_binned + LI_FIBROSIS_collapsed +
+    DEATH_CIRCUM_DON_collapsed + DEATH_MECH_DON_collapsed +
+    GENDER_DON_donor + ABO_DON + ALCOHOL_HEAVY_DON_donor +
+    CLIN_INFECT_DON + HIST_DIABETES_DON + HIST_HYPERTENS_DON +
+    HIST_CANCER_DON + HIST_CAD + SODIUM170_VAL_DON + BLOOD_INF_DON +
+    AGE_binned + GENDER + ETHCAT + BMI_CALC + MELD_PELD_ADJ +
+    ASCITES_TX + ENCEPH_TX + DIAB + DAYSWAIT_CHRON +
+    pre_clamp_hours + post_clamp_hours +
+    # Institutional
+    OPO_CTR_CODE + LISTING_CTR_CODE,
+  data = multinom_data,
+  maxit = 1000,
+  trace = FALSE
+)
+
+cat("✓ Model B converged.\n")
+
+
+# Check model fitted values
+cat("\nDiagnosing model data usage:\n")
+cat("  multinom_data rows:", nrow(multinom_data), "\n")
+cat("  model_clinical fitted rows:", length(fitted(model_clinical)[,1]), "\n")
+cat("  model_full fitted rows:", length(fitted(model_full)[,1]), "\n")
+
+# If models dropped rows, create subset
+if (length(fitted(model_clinical)[,1]) != nrow(multinom_data)) {
+  cat("  WARNING: Model A dropped observations. Creating subset...\n")
+  model_clinical_indices <- as.numeric(names(fitted(model_clinical)[,1]))
+  multinom_data_clinical <- multinom_data[model_clinical_indices, ]
+} else {
+  multinom_data_clinical <- multinom_data
+}
+
+if (length(fitted(model_full)[,1]) != nrow(multinom_data)) {
+  cat("  WARNING: Model B dropped observations. Creating subset...\n")
+  model_full_indices <- as.numeric(names(fitted(model_full)[,1]))
+  multinom_data_full <- multinom_data[model_full_indices, ]
+} else {
+  multinom_data_full <- multinom_data
+}
+
+cat("  Final Model A data:", nrow(multinom_data_clinical), "\n")
+cat("  Final Model B data:", nrow(multinom_data_full), "\n\n")
+
+# Likelihood ratio test
+lr_test <- anova(model_clinical, model_full)
+
+cat("\n=== LIKELIHOOD RATIO TEST ===\n")
+cat("Testing joint significance of OPO and listing center effects\n\n")
+print(lr_test)
+
+# Calculate AICs
+aic_clinical <- AIC(model_clinical)
+aic_full <- AIC(model_full)
+
+cat("\n=== MODEL COMPARISON ===\n")
+cat("Model A (Clinical only) AIC:", round(aic_clinical, 1), "\n")
+cat("Model B (+ Institutional) AIC:", round(aic_full, 1), "\n")
+cat("AIC improvement:", round(aic_clinical - aic_full, 1), "\n\n")
+
+# Predictions
+pred_clinical <- predict(model_clinical, type = "class")
+pred_full <- predict(model_full, type = "class")
+
+# Confusion matrices
+conf_clinical <- table(Predicted = pred_clinical, Actual = multinom_data_clinical$seq_flag)
+conf_full <- table(Predicted = pred_full, Actual = multinom_data_full$seq_flag)
+
+# Calculate metrics for Model A
+acc_clinical <- sum(diag(conf_clinical)) / sum(conf_clinical)
+sens_lt50_clinical <- conf_clinical[1,1] / sum(conf_clinical[,1])
+sens_gte50_clinical <- conf_clinical[2,2] / sum(conf_clinical[,2])
+sens_aoos_clinical <- conf_clinical[3,3] / sum(conf_clinical[,3])
+
+spec_lt50_clinical <- sum(conf_clinical[-1,-1]) / sum(conf_clinical[,-1])
+spec_gte50_clinical <- (conf_clinical[1,1] + conf_clinical[3,1] + conf_clinical[1,3] + conf_clinical[3,3]) / 
+  (sum(conf_clinical) - sum(conf_clinical[,2]))
+spec_aoos_clinical <- (conf_clinical[1,1] + conf_clinical[2,1] + conf_clinical[1,2] + conf_clinical[2,2]) / 
+  (sum(conf_clinical) - sum(conf_clinical[,3]))
+
+# Calculate metrics for Model B
+acc_full <- sum(diag(conf_full)) / sum(conf_full)
+sens_lt50_full <- conf_full[1,1] / sum(conf_full[,1])
+sens_gte50_full <- conf_full[2,2] / sum(conf_full[,2])
+sens_aoos_full <- conf_full[3,3] / sum(conf_full[,3])
+
+spec_lt50_full <- sum(conf_full[-1,-1]) / sum(conf_full[,-1])
+spec_gte50_full <- (conf_full[1,1] + conf_full[3,1] + conf_full[1,3] + conf_full[3,3]) / 
+  (sum(conf_full) - sum(conf_full[,2]))
+spec_aoos_full <- (conf_full[1,1] + conf_full[2,1] + conf_full[1,2] + conf_full[2,2]) / 
+  (sum(conf_full) - sum(conf_full[,3]))
+
+
+# ============================================================================
+# CONFUSION MATRICES AND PERFORMANCE METRICS
+# ============================================================================
+
+cat("\n=== MODEL A: CONFUSION MATRIX ===\n")
+print(conf_clinical)
+cat("\n")
+
+cat("MODEL A PERFORMANCE:\n")
+cat("  Overall Accuracy:", percent(acc_clinical, accuracy = 0.1), "\n\n")
+cat("  <50 sequence:\n")
+cat("    Sensitivity:", percent(sens_lt50_clinical, accuracy = 0.1), "\n")
+cat("    Specificity:", percent(spec_lt50_clinical, accuracy = 0.1), "\n\n")
+cat("  ≥50 sequence:\n")
+cat("    Sensitivity:", percent(sens_gte50_clinical, accuracy = 0.1), "\n")
+cat("    Specificity:", percent(spec_gte50_clinical, accuracy = 0.1), "\n\n")
+cat("  AOOS:\n")
+cat("    Sensitivity:", percent(sens_aoos_clinical, accuracy = 0.1), "\n")
+cat("    Specificity:", percent(spec_aoos_clinical, accuracy = 0.1), "\n\n")
+
+cat("\n=== MODEL B: CONFUSION MATRIX ===\n")
+print(conf_full)
+cat("\n")
+
+cat("MODEL B PERFORMANCE:\n")
+cat("  Overall Accuracy:", percent(acc_full, accuracy = 0.1), "\n\n")
+cat("  <50 sequence:\n")
+cat("    Sensitivity:", percent(sens_lt50_full, accuracy = 0.1), "\n")
+cat("    Specificity:", percent(spec_lt50_full, accuracy = 0.1), "\n\n")
+cat("  ≥50 sequence:\n")
+cat("    Sensitivity:", percent(sens_gte50_full, accuracy = 0.1), "\n")
+cat("    Specificity:", percent(spec_gte50_full, accuracy = 0.1), "\n\n")
+cat("  AOOS:\n")
+cat("    Sensitivity:", percent(sens_aoos_full, accuracy = 0.1), "\n")
+cat("    Specificity:", percent(spec_aoos_full, accuracy = 0.1), "\n")
+
+
+# ============================================================================
+# CREATE TABLES FOR LATER DISPLAY
+# ============================================================================
+
+# Model Comparison Table
+model_comparison_table <- tibble(
+  Model = c("Model A (Clinical only)", "Model B (+ Institutional)"),
+  AIC = c(round(aic_clinical, 1), round(aic_full, 1)),
+  `Overall Accuracy` = c(
+    sprintf("%.1f%%", acc_clinical * 100),
+    sprintf("%.1f%%", acc_full * 100)
+  )
+) %>%
+  mutate(
+    `AIC Improvement` = c("—", sprintf("%.1f", aic_clinical - aic_full))
+  )
+
+
+# Performance Metrics Table - Model A
+performance_A_table <- tibble(
+  `Allocation Group` = c("<50 sequence", "≥50 sequence", "AOOS (out-of-sequence)"),
+  Sensitivity = c(
+    sprintf("%.1f%%", sens_lt50_clinical * 100),
+    sprintf("%.1f%%", sens_gte50_clinical * 100),
+    sprintf("%.1f%%", sens_aoos_clinical * 100)
+  ),
+  Specificity = c(
+    sprintf("%.1f%%", spec_lt50_clinical * 100),
+    sprintf("%.1f%%", spec_gte50_clinical * 100),
+    sprintf("%.1f%%", spec_aoos_clinical * 100)
+  )
+)
+
+# Performance Metrics Table - Model B
+performance_B_table <- tibble(
+  `Allocation Group` = c("<50 sequence", "≥50 sequence", "AOOS (out-of-sequence)"),
+  Sensitivity = c(
+    sprintf("%.1f%%", sens_lt50_full * 100),
+    sprintf("%.1f%%", sens_gte50_full * 100),
+    sprintf("%.1f%%", sens_aoos_full * 100)
+  ),
+  Specificity = c(
+    sprintf("%.1f%%", spec_lt50_full * 100),
+    sprintf("%.1f%%", spec_gte50_full * 100),
+    sprintf("%.1f%%", spec_aoos_full * 100)
+  )
+)
+
+# Confusion Matrix - Model A (formatted)
+confusion_A_table <- as.data.frame.matrix(conf_clinical) %>%
+  rownames_to_column("Predicted") %>%
+  mutate(across(where(is.numeric), comma))
+
+# Confusion Matrix - Model B (formatted)
+confusion_B_table <- as.data.frame.matrix(conf_full) %>%
+  rownames_to_column("Predicted") %>%
+  mutate(across(where(is.numeric), comma))
+
+
+```
+
+```{r, results='asis'}
+page_break()
+```
+
+## Table S12: Multinomial Logistic Regression Model Fitting
+
+```{r - model summary stats tables}
+library(gt)
+
+model_comparison_table %>%
+  gt() %>%
+  cols_align(
+    align = "left",
+    columns = Model
+  ) %>%
+  cols_align(
+    align = "right",
+    columns = c(AIC, `Overall Accuracy`, `AIC Improvement`)
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    heading.title.font.size = px(14)
+  )
+
+```
+**Table S12.** Overall accuracy and Akaike information criterion (AIC) metrics for Model A
+
+```{r, results='asis'}
+page_break()
+```
+
+
+## Table S13: Model A Confusion Matrix (Clinical predictors only)
+
+``` {r - Confusion A}
+ 
+confusion_A_table %>%
+  gt() %>%
+  tab_spanner(
+    label = "Actual Allocation Group",
+    columns = -Predicted
+  ) %>%
+  cols_align(
+    align = "left",
+    columns = Predicted
+  ) %>%
+  cols_align(
+    align = "right",
+    columns = -Predicted
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    heading.title.font.size = px(14)
+  )
+```
+**Table S13**. Model A Confusion matrix table.
+
+```{r, results='asis'}
+page_break()
+```
+
+
+## Table S14: Model A Performance Metrics
+```{r - performance a table}
+performance_A_table %>%
+  gt()  %>%
+  cols_align(
+    align = "left",
+    columns = `Allocation Group`
+  ) %>%
+  cols_align(
+    align = "right",
+    columns = c(Sensitivity, Specificity)
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    heading.title.font.size = px(14)
+  )
+```
+**Table S14** Model A sensitivity and specificity per allocation pathway. 
+
+```{r, results='asis'}
+page_break()
+```
+
+
+## Table S15: Model B Confusion Matrix (Model A + OPO/Center Characteristics)
+``` {r - model b metrics}
+confusion_B_table %>%
+  gt() %>%
+  tab_header(
+    title=md(""),
+    subtitle = "Clinical + Institutional predictors"
+  ) %>%
+  tab_spanner(
+    label = "Actual Allocation Group",
+    columns = -Predicted
+  ) %>%
+  cols_align(
+    align = "left",
+    columns = Predicted
+  ) %>%
+  cols_align(
+    align = "right",
+    columns = -Predicted
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    heading.title.font.size = px(14)
+  )
+```
+**Table S15.** Model B confusion matrix. 
+
+
+```{r, results='asis'}
+page_break()
+```
+
+
+## Table S16: Model B Performance Metrics
+```{r - performance B table}
+performance_B_table %>%
+  gt() %>%
+  tab_header(
+    title=md(""),
+    subtitle = sprintf("Overall Accuracy: %.1f%%", acc_full * 100)
+  ) %>%
+  cols_align(
+    align = "left",
+    columns = `Allocation Group`
+  ) %>%
+  cols_align(
+    align = "right",
+    columns = c(Sensitivity, Specificity)
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    heading.title.font.size = px(14)
+  )
+
+```
+**Table S16.** Model B sensitivity and specificity table for 3 allocation pathways. 
+
+```{r, results='asis'}
+page_break()
+```
+
+
+#Table S17: Coefficient tables for Model A (Clinical only)
+
+```{r model-A-coefficients}
+# MODEL A (Clinical only)
+coef_matrix_A <- coef(model_clinical)
+se_matrix_A <- summary(model_clinical)$standard.errors
+z_matrix_A <- coef_matrix_A / se_matrix_A
+p_matrix_A <- 2 * (1 - pnorm(abs(z_matrix_A)))
+
+# Calculate DSRI decile
+dsri_decile <- quantile(multinom_data$DSRI, 0.1, na.rm = TRUE)
+
+# Increment map
+increment_map <- c(
+  "BMI_DON_CALC_donor" = 5,
+  "DRI" = 0.5,
+  "DSRI" = dsri_decile,
+  "BMI_CALC" = 5,
+  "MELD_PELD_ADJ" = 5,
+  "DAYSWAIT_CHRON" = 180,
+  "pre_clamp_hours" = 4,
+  "post_clamp_hours" = 1
+)
+
+# Function to rescale RRRs
+rescale_rrr <- function(coef, se, term) {
+  if (term %in% names(increment_map)) {
+    increment <- increment_map[term]
+    scaled_coef <- coef * increment
+    scaled_se <- se * increment
+  } else {
+    scaled_coef <- coef
+    scaled_se <- se
+  }
+  
+  list(
+    rrr = exp(scaled_coef),
+    rrr_ci_low = exp(scaled_coef - 1.96 * scaled_se),
+    rrr_ci_high = exp(scaled_coef + 1.96 * scaled_se)
+  )
+}
+
+# Create tidy tables for Model A
+tidy_gte50_A <- tibble(
+  term = rownames(t(coef_matrix_A)),
+  coefficient = coef_matrix_A[1, ],
+  se = se_matrix_A[1, ],
+  z = z_matrix_A[1, ],
+  p = p_matrix_A[1, ]
+) %>%
+  filter(term != "(Intercept)") %>%
+  rowwise() %>%
+  mutate(
+    scaled = list(rescale_rrr(coefficient, se, term)),
+    rrr = scaled$rrr,
+    rrr_ci_low = scaled$rrr_ci_low,
+    rrr_ci_high = scaled$rrr_ci_high
+  ) %>%
+  ungroup() %>%
+  select(-scaled) %>%
+  mutate(
+    comparison = "≥50 vs <50 sequence",
+    rrr_display = sprintf("%.2f (%.2f–%.2f)", rrr, rrr_ci_low, rrr_ci_high),
+    p_display = case_when(
+      p < 0.001 ~ "<0.001",
+      p < 0.01 ~ sprintf("%.3f", p),
+      TRUE ~ sprintf("%.2f", p)
+    ),
+    significant = p < 0.05
+  )
+
+tidy_aoos_A <- tibble(
+  term = rownames(t(coef_matrix_A)),
+  coefficient = coef_matrix_A[2, ],
+  se = se_matrix_A[2, ],
+  z = z_matrix_A[2, ],
+  p = p_matrix_A[2, ]
+) %>%
+  filter(term != "(Intercept)") %>%
+  rowwise() %>%
+  mutate(
+    scaled = list(rescale_rrr(coefficient, se, term)),
+    rrr = scaled$rrr,
+    rrr_ci_low = scaled$rrr_ci_low,
+    rrr_ci_high = scaled$rrr_ci_high
+  ) %>%
+  ungroup() %>%
+  select(-scaled) %>%
+  mutate(
+    comparison = "AOOS vs <50 sequence",
+    rrr_display = sprintf("%.2f (%.2f–%.2f)", rrr, rrr_ci_low, rrr_ci_high),
+    p_display = case_when(
+      p < 0.001 ~ "<0.001",
+      p < 0.01 ~ sprintf("%.3f", p),
+      TRUE ~ sprintf("%.2f", p)
+    ),
+    significant = p < 0.05
+  )
+
+# Coefficient table for Model A
+coef_table_A <- bind_rows(tidy_gte50_A, tidy_aoos_A) %>%
+  select(comparison, term, rrr_display, p_display, significant) %>%
+  gt(groupname_col = "comparison") %>%
+  cols_label(
+    term = "Variable",
+    rrr_display = "RRR (95% CI)",
+    p_display = "P-value",
+    significant = "Sig"
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#FFF3CD"),
+    locations = cells_body(rows = significant == TRUE)
+  ) %>%
+  tab_footnote(
+    footnote = "Reference category: <50 sequence. Continuous variables rescaled to clinically meaningful increments.",
+    locations = cells_column_labels(columns = term)
+  ) %>%
+  cols_hide(columns = significant)
+
+coef_table_A
+```
+**Table S17**: Model A Relative risk ratios and 95% CI's for variables inputted into multinomial logistic regression model to explore driving factors for three allocation pathways (<5o sequence reference).
+```{r, results='asis'}
+page_break()
+```
+
+# Table S18: Coefficient tables for Model B (Model A + Center/OPO effects)
+```{r model-B-coefficients}
+# MODEL B (With institutional effects)
+coef_matrix_B <- coef(model_full)
+se_matrix_B <- summary(model_full)$standard.errors
+z_matrix_B <- coef_matrix_B / se_matrix_B
+p_matrix_B <- 2 * (1 - pnorm(abs(z_matrix_B)))
+
+# Create tidy tables for Model B
+tidy_gte50_B <- tibble(
+  term = rownames(t(coef_matrix_B)),
+  coefficient = coef_matrix_B[1, ],
+  se = se_matrix_B[1, ],
+  z = z_matrix_B[1, ],
+  p = p_matrix_B[1, ]
+) %>%
+  filter(term != "(Intercept)") %>%
+  rowwise() %>%
+  mutate(
+    scaled = list(rescale_rrr(coefficient, se, term)),
+    rrr = scaled$rrr,
+    rrr_ci_low = scaled$rrr_ci_low,
+    rrr_ci_high = scaled$rrr_ci_high
+  ) %>%
+  ungroup() %>%
+  select(-scaled) %>%
+  mutate(
+    comparison = "≥50 vs <50 sequence",
+    rrr_display = sprintf("%.2f (%.2f–%.2f)", rrr, rrr_ci_low, rrr_ci_high),
+    p_display = case_when(
+      p < 0.001 ~ "<0.001",
+      p < 0.01 ~ sprintf("%.3f", p),
+      TRUE ~ sprintf("%.2f", p)
+    ),
+    significant = p < 0.05
+  )
+
+tidy_aoos_B <- tibble(
+  term = rownames(t(coef_matrix_B)),
+  coefficient = coef_matrix_B[2, ],
+  se = se_matrix_B[2, ],
+  z = z_matrix_B[2, ],
+  p = p_matrix_B[2, ]
+) %>%
+  filter(term != "(Intercept)") %>%
+  rowwise() %>%
+  mutate(
+    scaled = list(rescale_rrr(coefficient, se, term)),
+    rrr = scaled$rrr,
+    rrr_ci_low = scaled$rrr_ci_low,
+    rrr_ci_high = scaled$rrr_ci_high
+  ) %>%
+  ungroup() %>%
+  select(-scaled) %>%
+  mutate(
+    comparison = "AOOS vs <50 sequence",
+    rrr_display = sprintf("%.2f (%.2f–%.2f)", rrr, rrr_ci_low, rrr_ci_high),
+    p_display = case_when(
+      p < 0.001 ~ "<0.001",
+      p < 0.01 ~ sprintf("%.3f", p),
+      TRUE ~ sprintf("%.2f", p)
+    ),
+    significant = p < 0.05
+  )
+
+# Coefficient table for Model B
+coef_table_B <- bind_rows(tidy_gte50_B, tidy_aoos_B) %>%
+  select(comparison, term, rrr_display, p_display, significant) %>%
+  gt(groupname_col = "comparison") %>%
+  cols_label(
+    term = "Variable",
+    rrr_display = "RRR (95% CI)",
+    p_display = "P-value",
+    significant = "Sig"
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#FFF3CD"),
+    locations = cells_body(rows = significant == TRUE)
+  ) %>%
+  tab_footnote(
+    footnote = "Reference category: <50 sequence. Includes OPO and listing center fixed effects.",
+    locations = cells_column_labels(columns = term)
+  ) %>%
+  cols_hide(columns = significant)
+
+coef_table_B
+```
+**Table S18**: Model B Relative risk ratios and 95% CI's for variables inputted into multinomial logistic regression model to explore driving factors for three allocation pathways (<5o sequence reference).
