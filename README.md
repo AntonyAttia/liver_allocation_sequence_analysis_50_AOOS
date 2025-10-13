@@ -6,3 +6,4 @@
 
 **03_calculate_variables.r** script further builds the cohort by: counting distinct centers contacted before the accepting center, standardising key fields and normalising units, computing donor risk indices (DRI) and discard risk (DSRI), deriving donor–recipient body surface area (BSA) ratio; recalculating and capping MELD variants (MELD, MELD-Na, MELD-3), calculating timing metrics from proxy of match-run start to center response as well as proximity to cross-clamp, creating categorical flags for donation type (DBD/DCD), regional groups, and three machine-perfusion definitions (original, FDA-era proxy, and >12-hour cold ischaemia).
 
+**04_analysis.Rmd** is the R markdown file that generates the figures, statistics of the manuscript and supplement respectively.
