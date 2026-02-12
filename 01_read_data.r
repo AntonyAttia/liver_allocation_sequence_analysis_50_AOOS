@@ -9,10 +9,10 @@ library(here)
 date_lb <- as.Date("2021-12-9")
 
 # Read raw data files
-ptr <- read_sas("~/Desktop/Stanford/Open Offers/Manuscript/liver_allocation_sequence_analysis_50_AOOS/data_raw/ptr_li.sas7bdat")
-liver <- read_sas("~/Downloads/SAS Dataset 202512/Liver/liver_data.sas7bdat")
-donor <- read_sas("~/Desktop/Stanford/Open Offers/PredictingSequence/deceased_donor_data.sas7bdat")
-labpanels <- read_sas("~/Downloads/labpanels.sas7bdat")
+ptr <- read_sas("~ptr_li.sas7bdat")
+liver <- read_sas("~liver_data.sas7bdat")
+donor <- read_sas("~deceased_donor_data.sas7bdat")
+labpanels <- read_sas("~labpanels.sas7bdat")
 
 # Reduce to required columns only
 ptr_reduced <- ptr %>%
