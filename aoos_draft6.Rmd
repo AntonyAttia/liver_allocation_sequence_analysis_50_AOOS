@@ -1927,7 +1927,7 @@ if (nrow(median_pair_timing_fig5) > 0) {
 ```{r fig6-prep}
 # center name lookups (if needed)
 if (!exists("listing_center_names")) {
-  ctr_unos <- read_csv("~/Desktop/Stanford/Open Offers/center UNOS new.csv", show_col_types = FALSE)
+  ctr_unos <- read_csv("~center UNOS new.csv", show_col_types = FALSE)
   listing_center_names <- ctr_unos %>%
     select(LISTING_CTR_CODE, LISTING_CTR) %>%
     filter(!is.na(LISTING_CTR_CODE)) %>%
@@ -3981,7 +3981,7 @@ Density curves showing the distribution of acceptance timing (time relative to c
 
 ```{r figSF7-prep}
 # Load center name lookups
-ctr_unos <- read_csv("~/Desktop/Stanford/Open Offers/center UNOS new.csv", show_col_types = FALSE)
+ctr_unos <- read_csv("~center UNOS new.csv", show_col_types = FALSE)
 listing_center_names <- ctr_unos %>%
   select(LISTING_CTR_CODE, LISTING_CTR) %>%
   filter(!is.na(LISTING_CTR_CODE)) %>%
