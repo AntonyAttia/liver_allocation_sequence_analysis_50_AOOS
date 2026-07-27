@@ -1,0 +1,12 @@
+.DS_Store
+.RData
+.Rhistory
+.Rproj.user/
+
+data_raw/
+data_processed/
+figures/
+
+*.html
+*.docx
+*.pdf

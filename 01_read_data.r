@@ -1,22 +1,40 @@
-# 01_read_data_v2.r
+# 01_read_data.r
 # Loading raw data files into R
-# v2: Study period starts at EP implementation (2021-03-25).
+# Study period starts at EP implementation (2021-03-25).
 
 library(tidyverse)
 library(haven)
+library(here)
 
-# Where to save/load .rda files. Edit this to your project's data_processed folder.
-DATA_DIR <- "/Users/antonyattia/Desktop/Stanford/Open Offers/Manuscript/liver_allocation_sequence_analysis_50_AOOS/data_processed"
+DATA_DIR <- here("data_processed")
+RAW_DATA_DIR <- Sys.getenv("AOOS_RAW_DATA_DIR", unset = here("data_raw"))
 if (!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive = TRUE)
+
+raw_data_file <- function(filename, environment_variable) {
+  configured_path <- Sys.getenv(environment_variable)
+  path <- if (nzchar(configured_path)) {
+    path.expand(configured_path)
+  } else {
+    file.path(RAW_DATA_DIR, filename)
+  }
+
+  if (!file.exists(path)) {
+    stop(
+      "Missing raw data file: ", path, "\n",
+      "Place the file in data_raw/ or set ", environment_variable, "."
+    )
+  }
+  path
+}
 
 # Study period lower bound = EP policy implementation date
 date_lb <- as.Date("2021-03-25")
 
 # Read raw data files
-ptr <- read_sas("~/Downloads/ptr_hr_li/ptr_li.sas7bdat")
-liver <- read_sas("~/Downloads/SAS Dataset 202512/Liver/liver_data.sas7bdat")
-donor <- read_sas("~/Downloads/SAS Dataset 202512/Deceased Donor/deceased_donor_data.sas7bdat")
-labpanels <- read_sas("~/Downloads/labpanels.sas7bdat")
+ptr <- read_sas(raw_data_file("ptr_li.sas7bdat", "AOOS_PTR_FILE"))
+liver <- read_sas(raw_data_file("liver_data.sas7bdat", "AOOS_LIVER_FILE"))
+donor <- read_sas(raw_data_file("deceased_donor_data.sas7bdat", "AOOS_DONOR_FILE"))
+labpanels <- read_sas(raw_data_file("labpanels.sas7bdat", "AOOS_LABPANELS_FILE"))
 
 # Reduce to required columns only
 ptr_reduced <- ptr %>%
@@ -45,7 +63,8 @@ donor_reduced <- donor %>%
     ABO_DON, AGE_DON, ALCOHOL_HEAVY_DON, BMI_DON_CALC, CLIN_INFECT_DON,
     COD_CAD_DON, CREAT_DON, DEATH_CIRCUM_DON, DEATH_MECH_DON, DONOR_ID,
     GENDER_DON, HCV_NAT, HEP_C_ANTI_DON, HGT_CM_DON_CALC, HISTORYOFDRUGUSE,
-    LI_BIOPSY_DON, LI_DISCARD_CD, LI_FIBROSIS, MACRO_FAT_LI_DON, NON_HRT_DON, NUM_LI_RECOV,
+    LI_BIOPSY_DON, LI_DISCARD_CD, LI_FIBROSIS, MACRO_FAT_LI_DON, NON_HRT_DON,
+    DON_DATE, NUM_LI_RECOV, NUM_LI_TX, NUM_LI_DISC,
     OPO_CTR_CODE, TBILI_DON, WGT_KG_DON_CALC,
     BUN_DON, CDC_RISK_HIV_DON, CONSENT_DON_CARD, HBV_CORE_DON,
     HIST_DIABETES_DON, HIST_HYPERTENS_DON, HIST_CANCER_DON, HIST_CAD,
@@ -57,7 +76,7 @@ donor_reduced <- donor %>%
 save(ptr_reduced, liver_reduced, donor_reduced, labpanels, date_lb,
      file = file.path(DATA_DIR, "01_raw_data_v2.rda"))
 
-cat("01_read_data_v2.r complete\n")
+cat("01_read_data.r complete\n")
 cat("  Saved to:", file.path(DATA_DIR, "01_raw_data_v2.rda"), "\n")
 cat("  Study period starts:", as.character(date_lb), "(EP implementation)\n")
 cat("  ptr_reduced:", nrow(ptr_reduced), "rows\n")

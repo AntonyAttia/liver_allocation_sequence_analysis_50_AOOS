@@ -1,4 +1,4 @@
-# sf_ep_validation.r — EP Validation Summary (887 vs OPTN 6-month monitoring report)
+# sf_ep_validation.r: EP validation summary (887 vs OPTN 6-month monitoring report)
 # Confirms bypass code 887 identifies policy-compliant EP in PTR data.
 
 EP_BYPASS_CODE <- 887L
@@ -73,21 +73,29 @@ if (requireNamespace("gt", quietly = TRUE)) {
     gt::gt() %>%
     gt::tab_header(
       title = "EP validation against OPTN 6-month monitoring report",
-      subtitle = "Counts are number of match runs in the 6-month post-policy period (March–September 2021)."
+      subtitle = "Counts are number of match runs in the 6-month post-policy period (March-September 2021)."
     ) %>%
     gt::tab_options(table.font.size = 14)
   html_ep <- tempfile(fileext = ".html")
   gt::gtsave(gt_tbl, filename = html_ep)
   if (requireNamespace("webshot2", quietly = TRUE)) {
     tryCatch({
-      webshot2::webshot(
+      webshot_to_tiff(
         url = paste0("file://", normalizePath(html_ep)),
-        file = here("figures", "supplement", "Table_EP_Validation.png"),
+        path_tiff = fig_path("figures", "supplement", "Table_EP_Validation.png"),
         vwidth = 800, vheight = 400, zoom = 2
       )
-    }, error = function(e) gt::gtsave(gt_tbl, here("figures", "supplement", "Table_EP_Validation.png")))
+    }, error = function(e) {
+      tmp <- tempfile(fileext = ".png")
+      on.exit(unlink(tmp), add = TRUE)
+      gt::gtsave(gt_tbl, tmp)
+      png_file_to_tiff(tmp, fig_path("figures", "supplement", "Table_EP_Validation.png"))
+    })
   } else {
-    gt::gtsave(gt_tbl, here("figures", "supplement", "Table_EP_Validation.png"))
+    tmp <- tempfile(fileext = ".png")
+    on.exit(unlink(tmp), add = TRUE)
+    gt::gtsave(gt_tbl, tmp)
+    png_file_to_tiff(tmp, fig_path("figures", "supplement", "Table_EP_Validation.png"))
   }
 }
-cat("Saved: figures/supplement/Table_EP_Validation.csv (and .png)\n")
+cat("Saved: figures/supplement/Table_EP_Validation.csv (and .tiff)\n")

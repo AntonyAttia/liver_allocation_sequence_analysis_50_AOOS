@@ -1,6 +1,6 @@
-# sf_utilisation.r — Supplemental Utilisation Figures (separate panels per pathway)
-# Stratified by DCD/DBD. Each pathway shown individually.
-# Moved to supplement with undercount caveat.
+# sf_utilisation.r
+# Proportion of match-runs ending in transplantation by hours from cross-clamp and pathway
+# (labeled as utilization rate for ease of reading). Stratified by DCD/DBD.
 
 EP_BYPASS_CODE    <- 887L
 AOOS_BYPASS_CODES <- c(861L, 862L, 863L, 888L)
@@ -85,7 +85,7 @@ p_inseq <- make_util_plot(util_data, "In-sequence")
 p_aoos  <- make_util_plot(util_data, "AOOS (out-of-sequence)")
 p_ep    <- make_util_plot(util_data, "EP (Policy 9.10)")
 
-# Combined as one figure with panels A B C (three pathways); y-axis "Utilization rate (%)" is self-explanatory
+# Combined figure, panels A-C (three pathways)
 combined_util <- (p_inseq | p_aoos | p_ep) +
   plot_layout(guides = "collect") &
   theme(legend.position = "bottom")
@@ -93,10 +93,11 @@ combined_util <- combined_util + plot_annotation(tag_levels = "A")
 
 print(combined_util)
 # Wide aspect ratio; slightly shorter height so figure is less tall
-ggsave(here("figures", "supplement", "SF_Utilisation_Combined.png"), combined_util,
-       width = 14, height = 4.5, dpi = 300)
+ggsave(fig_path("figures", "supplement", "S8_Utilisation.png"), combined_util,
+       width = 14, height = 4.5, dpi = FIG_DPI, compression = "lzw")
 
-# Utilisation summary table (selected time points); order In-sequence, AOOS, EP
+# Summary at selected time points (In-sequence, AOOS, EP)
+# AOOS attempts on non-transplanted livers are undercounted; interpret AOOS rates with caution
 pathway_order <- c("In-sequence", "AOOS (out-of-sequence)", "EP (Policy 9.10)")
 util_summary <- util_data %>%
   filter(cutoff_hours %in% c(-12, -8, -4, 0, 4)) %>%
@@ -104,13 +105,9 @@ util_summary <- util_data %>%
   mutate(pathway = factor(pathway, levels = pathway_order)) %>%
   arrange(pathway, donation_type, cutoff_hours)
 
-cat("\n=== Supplemental Utilisation Table (selected time points) ===\n")
-cat("CAVEAT: AOOS attempts on non-transplanted livers are significantly undercounted.\n")
-cat("These numbers should be interpreted with extreme caution.\n\n")
 print(knitr::kable(util_summary, format = "simple"))
 
-# Overall utilization rate and total counts by pathway (for reporting)
-# (A) At 24-hour window: utilized = acceptances with hours_from_clamp >= -24 (used for curves)
+# Overall by pathway at 24h window (utilized = acceptances with hours_from_clamp >= -24)
 overall_util <- util_data %>%
   filter(cutoff_hours == -24) %>%
   group_by(pathway) %>%
@@ -120,25 +117,9 @@ overall_util <- util_data %>%
          pathway = factor(pathway, levels = pathway_order)) %>%
   arrange(pathway)
 
-cat("\n=== Overall utilization by pathway (at 24h window: utilized = acceptance >= -24h from clamp) ===\n")
-cat("Pathway          | Utilized (transplanted) | Discarded | Total | Utilization (%)\n")
-cat("-----------------|-------------------------|-----------|-------|------------------\n")
-pathway_display <- c("In-sequence" = "In-sequence",
-                     "AOOS (out-of-sequence)" = "AOOS", "EP (Policy 9.10)" = "EP")
-for (i in seq_len(nrow(overall_util))) {
-  r <- overall_util[i, ]
-  lab <- pathway_display[as.character(r$pathway)]
-  if (is.na(lab)) lab <- as.character(r$pathway)
-  cat(sprintf("%-16s | %21s | %9s | %5s | %s%%\n",
-              lab, format(r$n_utilized, big.mark = ","),
-              format(r$n_discarded, big.mark = ","),
-              format(r$total, big.mark = ","),
-              format(r$utilization_pct, nsmall = 1)))
-}
-cat("\n")
 print(overall_util)
 
-# (B) Whole period: utilized = all accepted transplants (no time cutoff); aligns with cohort n
+# Whole period: all accepted transplants (no time cutoff)
 accepted_by_pathway <- accepted_util %>%
   mutate(pathway = case_when(
     seq_flag %in% c("<50 sequence", "\u226550 sequence") ~ "In-sequence",
@@ -163,36 +144,4 @@ overall_util_full <- accepted_by_pathway %>%
   ) %>%
   arrange(pathway)
 
-cat("\n=== Overall utilization by pathway (whole period: all utilized = all transplanted) ===\n")
-cat("Pathway          | Utilized (transplanted) | Discarded | Total | Utilization (%)\n")
-cat("-----------------|-------------------------|-----------|-------|------------------\n")
-for (i in seq_len(nrow(overall_util_full))) {
-  r <- overall_util_full[i, ]
-  lab <- pathway_display[as.character(r$pathway)]
-  if (is.na(lab)) lab <- as.character(r$pathway)
-  cat(sprintf("%-16s | %21s | %9s | %5s | %s%%\n",
-              lab, format(r$n_utilized, big.mark = ","),
-              format(r$n_discarded, big.mark = ","),
-              format(r$total, big.mark = ","),
-              format(r$utilization_pct, nsmall = 1)))
-}
-cat("\n")
 print(overall_util_full)
-
-# Diagnostic: why overall_util shows 5,430 AOOS utilized vs 5,486 in timing_cohort
-# overall_util is computed at cutoff_hours == -24, so n_utilized = count with hours_from_clamp >= -24.
-# Acceptances *more than* 24h before clamp (hours_from_clamp < -24) are therefore excluded.
-n_aoos_timing   <- sum(timing_cohort$seq_flag == "AOOS (out-of-sequence)", na.rm = TRUE)
-n_aoos_util     <- accepted_util %>% filter(seq_flag == "AOOS (out-of-sequence)") %>% nrow()
-aoos_accepted   <- accepted_util %>% filter(seq_flag == "AOOS (out-of-sequence)")
-n_aoos_at_cutoff <- sum(aoos_accepted$hours_from_clamp >= -24, na.rm = TRUE)
-n_aoos_before_24 <- sum(aoos_accepted$hours_from_clamp < -24, na.rm = TRUE)
-n_aoos_na_hr    <- sum(is.na(aoos_accepted$hours_from_clamp))
-cat("\n=== AOOS count diagnostic (timing cohort vs overall_util table) ===\n")
-cat(sprintf("AOOS in timing_cohort: %d; in accepted_util: %d\n", n_aoos_timing, n_aoos_util))
-cat(sprintf("Overall util table uses cutoff_hours = -24 => n_utilized = count with hours_from_clamp >= -24.\n"))
-cat(sprintf("  AOOS with hours_from_clamp >= -24 (counted): %d\n", n_aoos_at_cutoff))
-cat(sprintf("  AOOS with hours_from_clamp <  -24 (excluded): %d (accepted >24h before clamp)\n", n_aoos_before_24))
-cat(sprintf("  AOOS with NA hours_from_clamp: %d\n", n_aoos_na_hr))
-cat(sprintf("  => Table 'Utilized' = %d; cohort n AOOS = %d; difference = %d\n",
-            n_aoos_at_cutoff, n_aoos_timing, n_aoos_timing - n_aoos_at_cutoff))

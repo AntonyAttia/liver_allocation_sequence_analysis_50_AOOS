@@ -1,7 +1,7 @@
-# table1.r — Table 1 (4 groups) + Supplemental Tables S2 (DBD) and S3 (DCD)
+# table1.r: Table 1 (4 groups) + Supplemental Tables S2 (DBD) and S3 (DCD)
 dir.create(here("figures", "main"), showWarnings = FALSE, recursive = TRUE)
 dir.create(here("figures", "supplement"), showWarnings = FALSE, recursive = TRUE)
-# ---- TABLE 1: 4-GROUP COMPARISON ----
+# Table 1: 4-group comparison
 tbl1 <- timing_cohort %>%
   select(
     seq_flag,
@@ -46,21 +46,21 @@ tbl1 <- timing_cohort %>%
   modify_caption("**Table 1. Baseline characteristics of transplanted recipients by allocation pathway**") %>%
   modify_header(label = "**Characteristic**")
 
-tbl1
+# The Rmd displays tbl1, tblS2 and tblS3; source() does not auto-print them.
 
 # Save
 tbl1_gt <- tbl1 %>% as_gt()
 html_file <- tempfile(fileext = ".html")
 gt::gtsave(tbl1_gt, filename = html_file)
 tryCatch({
-  webshot2::webshot(
+  webshot_to_tiff(
     url = paste0("file://", normalizePath(html_file)),
-    file = here("figures", "main", "Table1_Baseline_Characteristics.png"),
+    path_tiff = fig_path("figures", "main", "Table1_Baseline_Characteristics.png"),
     vwidth = 1600, vheight = 2400, delay = 2, zoom = 2
   )
 }, error = function(e) cat("webshot failed:", e$message, "\n"))
 
-# ---- SUPPLEMENTAL TABLE S2: DBD ONLY ----
+# Supplemental Table S2: DBD only
 tblS2 <- timing_cohort %>%
   filter(donation_type == "DBD") %>%
   select(
@@ -91,21 +91,19 @@ tblS2 <- timing_cohort %>%
   add_p(test = list(all_continuous() ~ "kruskal.test", all_categorical() ~ "chisq.test")) %>%
   modify_caption("**Supplemental Table S2. Baseline characteristics of DBD transplanted recipients by allocation pathway**")
 
-tblS2
-
 # Save Supplemental Table S2
 tblS2_gt <- tblS2 %>% as_gt()
 html_file_s2 <- tempfile(fileext = ".html")
 gt::gtsave(tblS2_gt, filename = html_file_s2)
 tryCatch({
-  webshot2::webshot(
+  webshot_to_tiff(
     url = paste0("file://", normalizePath(html_file_s2)),
-    file = here("figures", "supplement", "TableS2_DBD_Baseline_Characteristics.png"),
+    path_tiff = fig_path("figures", "supplement", "TableS2_DBD_Baseline_Characteristics.png"),
     vwidth = 1600, vheight = 2400, delay = 2, zoom = 2
   )
 }, error = function(e) cat("webshot S2 failed:", e$message, "\n"))
 
-# ---- SUPPLEMENTAL TABLE S3: DCD ONLY ----
+# Supplemental Table S3: DCD only
 tblS3 <- timing_cohort %>%
   filter(donation_type == "DCD") %>%
   select(
@@ -136,29 +134,14 @@ tblS3 <- timing_cohort %>%
   add_p(test = list(all_continuous() ~ "kruskal.test", all_categorical() ~ "chisq.test")) %>%
   modify_caption("**Supplemental Table S3. Baseline characteristics of DCD transplanted recipients by allocation pathway**")
 
-tblS3
-
 # Save Supplemental Table S3
 tblS3_gt <- tblS3 %>% as_gt()
 html_file_s3 <- tempfile(fileext = ".html")
 gt::gtsave(tblS3_gt, filename = html_file_s3)
 tryCatch({
-  webshot2::webshot(
+  webshot_to_tiff(
     url = paste0("file://", normalizePath(html_file_s3)),
-    file = here("figures", "supplement", "TableS3_DCD_Baseline_Characteristics.png"),
+    path_tiff = fig_path("figures", "supplement", "TableS3_DCD_Baseline_Characteristics.png"),
     vwidth = 1600, vheight = 2400, delay = 2, zoom = 2
   )
 }, error = function(e) cat("webshot S3 failed:", e$message, "\n"))
-
-# Print one-off DSRI inspection
-cat("\n=== Median DSRI by Group ===\n")
-timing_cohort %>%
-  group_by(seq_flag) %>%
-  summarise(
-    n = n(),
-    median_DSRI = median(DSRI, na.rm = TRUE),
-    q25_DSRI = quantile(DSRI, 0.25, na.rm = TRUE),
-    q75_DSRI = quantile(DSRI, 0.75, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  print()

@@ -1,7 +1,7 @@
-# fig2_refusal_timing.r — Figure 2: Refusal patterns (Panel A) + Placement timing (Panel B)
-# 4-group: <50, ≥50, AOOS, EP — EP gets its own bin on placement timing x-axis
+# fig2_refusal_timing.r: Figure 2. Refusal patterns (Panel A) + Placement timing (Panel B)
+# 4-group: <50, ≥50, AOOS, EP. EP gets its own bin on placement timing x-axis
 
-# ---- PANEL A: REFUSAL BAR CHART (4 groups) ----
+# Panel A: refusal bar chart (4 groups)
 timing_cohort_keys <- timing_cohort %>% distinct(DONOR_ID, MATCH_ID_CODE)
 
 donor_run_refusal_stats_filtered <- donor_run_refusal_stats %>%
@@ -65,7 +65,7 @@ p_refusals <- ggplot(plot_comparison, aes(x = metric_clean, y = value, fill = al
     axis.text.y = element_text(size = 11)
   )
 
-# ---- PANEL B: PLACEMENT TIMING (dual axis) ----
+# Panel B: placement timing (dual axis)
 # Sequence bins: 1..5, 6-10, 11-20, 21-30, 31-50, 51-100, 101-500, 500+, AOOS, EP
 timing_summary <- timing_cohort %>%
   mutate(
@@ -148,11 +148,10 @@ p_dual <- ggplot(plot_data, aes(x = sequence_bin, group = 1)) +
     plot.margin = margin(t = 15, r = 10, b = 15, l = 10)
   )
 
-# ---- COMBINED ----
+# Combined
 fig2_combined <- p_refusals | p_dual
 print(fig2_combined)
-ggsave(here("figures", "main", "Figure2_Refusal_Timing.png"), fig2_combined, width = 22, height = 8, dpi = 300)
+ggsave(fig_path("figures", "main", "Figure2_Refusal_Timing.png"), fig2_combined, width = 22, height = 8, dpi = FIG_DPI, compression = "lzw")
 
 # Print placement timing table
-cat("\n=== Placement Timing Summary ===\n")
 print(timing_summary, n = Inf)

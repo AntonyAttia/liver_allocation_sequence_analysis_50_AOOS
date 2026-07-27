@@ -1,7 +1,7 @@
-# sf1_cohort_flow.r — SF1: Cohort Flow Diagram (CONSORT-style)
-# Run from Rmd (uses existing counts/discarded_complete) or source standalone (loads from saved files).
+# sf_cohort_flow.r
+# Cohort flow diagram.
 
-# Always attach packages this script needs (safe if already loaded)
+# Load packages used for the flow diagram
 for (pkg in c("here", "glue", "scales", "DiagrammeR", "DiagrammeRsvg", "rsvg")) {
   if (!requireNamespace(pkg, quietly = TRUE)) stop("Please install.packages('", pkg, "')")
   suppressPackageStartupMessages(library(pkg, character.only = TRUE))
@@ -13,7 +13,7 @@ if (!exists("counts")) {
 
 comma <- scales::comma
 
-# Exclusion cascade from cohort building (02_build_cohort_v2.R)
+# Exclusion cascade from cohort building (02_build_cohort.r)
 n_init    <- comma(counts$n_initial)
 n_join    <- comma(counts$n_after_join)
 n_mo      <- comma(counts$n_after_multiorg)
@@ -57,7 +57,7 @@ if (exists("timing_cohort") && is.data.frame(timing_cohort) && nrow(timing_cohor
 # Label with actual ≥ character so Graphviz displays it correctly
 gte50_label <- "\u226550 sequence"
 
-# Discarded (not transplanted) section — use when available from 03_cohort_with_variables_v2.rda
+# Discarded (not transplanted) section; use when available from 03_cohort_with_variables_v2.rda
 if (exists("discarded_complete") && is.data.frame(discarded_complete) && nrow(discarded_complete) > 0) {
   n_disc_aoos       <- comma(sum(discarded_complete$allocation_type == "AOOS (out-of-sequence)", na.rm = TRUE))
   n_disc_sequential <- comma(sum(discarded_complete$allocation_type == "Sequential", na.rm = TRUE))
@@ -72,7 +72,6 @@ if (exists("discarded_complete") && is.data.frame(discarded_complete) && nrow(di
   has_discarded <- FALSE
 }
 
-# Draft5/6 style: breakdown text inside final cohort node
 breakdown_text <- paste0(
   "In-Sequence (<50): ", n_lt50, "  |  ", gte50_label, ": ", n_gte50, "\\n",
   "AOOS: ", n_aoos, "  |  EP: ", n_ep
@@ -90,7 +89,7 @@ digraph consort {{
   node [shape=box, style="rounded,filled", fillcolor="white", color="#666666", fontname="Arial", fontsize=10]
   edge [color="#666666", arrowsize=0.6]
 
-  # Transplant flow (left) — no connection to discarded
+  # Transplant flow (left); no connection to discarded
   A [label="All liver transplants in study period\\nN = {n_init}", fillcolor="#F8F8F8"]
   B [label="With accepted PTR record\\nN = {n_join}"]
   C [label="After multi-organ exclusion\\nN = {n_mo}"]
@@ -135,9 +134,12 @@ digraph consort {{
 }}
 ')
 
-svg_raw <- DiagrammeR::grViz(consort_dot) %>% DiagrammeRsvg::export_svg()
-rsvg::rsvg_png(charToRaw(svg_raw), here("figures", "supplement", "FigureSF1_Cohort_Flow.png"), width = 2400)
-cat("SF1 saved.\n")
+cohort_flow_diagram <- DiagrammeR::grViz(consort_dot)
 
-# Also render in Rmd
-DiagrammeR::grViz(consort_dot)
+# Raster for journal TIFF and for sized HTML embedding (avoid huge htmlwidget)
+svg_raw <- cohort_flow_diagram %>% DiagrammeRsvg::export_svg()
+cohort_flow_png_path <- here("figures", "supplement", "S1_Cohort_Flow.png")
+dir.create(dirname(cohort_flow_png_path), recursive = TRUE, showWarnings = FALSE)
+rsvg::rsvg_png(charToRaw(svg_raw), cohort_flow_png_path, width = 2400)
+png_file_to_tiff(cohort_flow_png_path, fig_path("figures", "supplement", "S1_Cohort_Flow.png"))
+message("Cohort flow figure saved.")

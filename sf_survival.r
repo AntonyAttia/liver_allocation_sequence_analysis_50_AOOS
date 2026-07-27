@@ -1,4 +1,5 @@
-# sf2_survival.r — Figure S2: Kaplan-Meier survival + Supplemental Table S4 (4 groups)
+# sf_survival.r
+# Kaplan-Meier survival by allocation pathway and donation type.
 
 surv_df <- timing_cohort %>%
   mutate(
@@ -67,10 +68,9 @@ combined_survival <- (p1_stack | p2_stack) / (p3_stack | p4_stack) +
         plot.margin = margin(6, 6, 6, 6))
 
 print(combined_survival)
-ggsave(here("figures", "supplement", "FigureSF2_Survival.png"), combined_survival, width = 14, height = 16, dpi = 300)
+ggsave(fig_path("figures", "supplement", "S5_Survival.png"), combined_survival, width = 14, height = 16, dpi = FIG_DPI, compression = "lzw")
 
-# Print p-values and 2-year estimates (follow plot xlim: 0–2 years since transplant)
-cat("\n=== SURVIVAL P-VALUES (log-rank, 0–2 years since transplant) ===\n")
+# Print p-values and 2-year estimates (follow plot xlim: 0-2 years since transplant)
 cat("DCD Patient:", sprintf("%.4f", pval_patient_dcd), "\n")
 cat("DCD Graft:", sprintf("%.4f", pval_graft_dcd), "\n")
 cat("DBD Patient:", sprintf("%.4f", pval_patient_dbd), "\n")
@@ -85,12 +85,12 @@ for (lbl in c("DBD graft", "DBD patient", "DCD graft", "DCD patient")) {
   )
   s <- summary(fit_obj, times = 2)
   for (i in seq_along(s$surv)) {
-    cat(sprintf("%s—%s: %.1f%% (%.1f–%.1f%%)\n",
+    cat(sprintf("%s-%s: %.1f%% (%.1f-%.1f%%)\n",
         lbl, labs_short[i], s$surv[i]*100, s$lower[i]*100, s$upper[i]*100))
   }
 }
 
-# ---- SUPPLEMENTAL TABLE S4: Survival Outcomes ----
+# Survival estimates table (Results text; not a numbered supplement table)
 timing_cohort_surv <- timing_cohort %>%
   mutate(PTIME_yrs = PTIME / 365.25, GTIME_yrs = GTIME / 365.25) %>%
   filter(!is.na(donation_type), !is.na(PSTATUS), !is.na(GSTATUS)) %>%
@@ -104,9 +104,13 @@ for (dtype in c("DBD", "DCD")) {
     event_var <- ifelse(outcome == "Patient", "PSTATUS", "GSTATUS")
     fit <- survfit(as.formula(paste0("Surv(", time_var, ", ", event_var, ") ~ seq_flag")), data = sub_df)
     for (yr in c(1, 2)) {
-      s <- summary(fit, times = yr)
-      for (i in seq_along(s$strata)) {
-        grp <- gsub("seq_flag=", "", names(s$strata)[i])
+      # extend=TRUE keeps strata whose last observed time is before yr
+      s <- summary(fit, times = yr, extend = TRUE)
+      if (length(s$surv) == 0L) next
+      # summary.survfit stores strata as a factor; names(strata) is NULL
+      strata_labs <- if (!is.null(s$strata)) as.character(s$strata) else rep(NA_character_, length(s$surv))
+      for (i in seq_along(s$surv)) {
+        grp <- gsub("^seq_flag=", "", strata_labs[i])
         results_list[[length(results_list) + 1]] <- tibble(
           `Donor Type` = dtype, Outcome = outcome,
           `Time (years)` = yr, Group = grp,
@@ -119,5 +123,4 @@ for (dtype in c("DBD", "DCD")) {
 }
 
 surv_table <- bind_rows(results_list)
-cat("\n=== Supplemental Table S4: Survival Outcomes ===\n")
 print(knitr::kable(surv_table, format = "simple"))

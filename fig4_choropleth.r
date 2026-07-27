@@ -1,4 +1,4 @@
-# fig4_choropleth.r — Figure 4: Choropleth maps
+# fig4_choropleth.r: Figure 4. Choropleth maps
 # Panel A: AOOS rate by OPO, Panel B: EP rate by OPO
 
 # Fetch OPO service area polygons
@@ -80,7 +80,7 @@ fig4 <- p_aoos_map / p_ep_map +
                   theme = theme(plot.caption = element_text(size = 10, hjust = 0.5, margin = margin(t = 10))))
 
 print(fig4)
-ggsave(here("figures", "main", "Figure4_Choropleth.png"), fig4, width = 14, height = 20, dpi = 300)
+ggsave(fig_path("figures", "main", "Figure4_Choropleth.png"), fig4, width = 14, height = 20, dpi = FIG_DPI, compression = "lzw")
 
 # Per-OPO stats (4 groups)
 dsri_by_opo <- timing_cohort %>%
@@ -92,7 +92,6 @@ dsri_by_opo <- timing_cohort %>%
   group_by(OPO_CTR_CODE = OPO_CTR_CODE_current, seq_flag) %>%
   summarise(n = n(), median_dsri = round(median(DSRI, na.rm = TRUE), 2), .groups = "drop")
 
-cat("\n=== Per-OPO: AOOS and EP rates ===\n")
 opo_summary %>%
   select(OPO_CTR_CODE, total, aoos_n, ep_n, aoos_rate, ep_rate) %>%
   arrange(desc(aoos_rate)) %>%
@@ -105,7 +104,6 @@ grand_totals <- opo_summary %>%
     total_ep = sum(ep_n, na.rm = TRUE),
     .groups = "drop"
   )
-cat("\n=== Grand totals (transplanted recipients) ===\n")
 print(grand_totals)
 
 total_opo <- nrow(opo_summary)
@@ -113,16 +111,13 @@ n_opo_zero_aoos <- sum(opo_summary$aoos_n == 0, na.rm = TRUE)
 n_opo_zero_ep   <- sum(opo_summary$ep_n == 0, na.rm = TRUE)
 n_opo_gt10_aoos <- sum(opo_summary$aoos_n > 10, na.rm = TRUE)
 n_opo_gt10_ep   <- sum(opo_summary$ep_n > 10, na.rm = TRUE)
-cat("\n=== OPO counts: 0 AOOS vs 0 EP ===\n")
 cat("Number of OPOs with 0 AOOS (no out-of-sequence): ", n_opo_zero_aoos, "/", total_opo, " OPOs\n", sep = "")
 cat("Number of OPOs with 0 EP (EP volume done by remaining OPOs): ", n_opo_zero_ep, "/", total_opo, " OPOs\n", sep = "")
-cat("\n=== OPOs contributing >10 cases ===\n")
 cat("Number of OPOs with >10 AOOS cases: ", n_opo_gt10_aoos, "/", total_opo, " OPOs\n", sep = "")
 cat("Number of OPOs with >10 EP cases: ", n_opo_gt10_ep, "/", total_opo, " OPOs\n", sep = "")
 
 opo_high <- opo_summary %>%
   mutate(high_aoos = aoos_n > 100, high_ep = ep_n > 10)
-cat("\n=== High EP vs High AOOS (thresholds: >10 EP, >100 AOOS) ===\n")
 tab <- with(opo_high, table(high_ep, high_aoos))
 print(addmargins(tab))
 n_high_ep        <- sum(opo_high$high_ep, na.rm = TRUE)
@@ -135,7 +130,6 @@ cat("Among OPOs with >10 EP cases (n = ", n_high_ep, "), ", n_both, " also had >
 cat("Among OPOs with >100 AOOS cases (n = ", n_high_aoos, "), ", n_both, " also had >10 EP cases.\n", sep = "")
 cat("OPOs high in EP only (no high AOOS): ", n_high_ep_only, ". OPOs high in AOOS only (no high EP): ", n_high_aoos_only, ".\n", sep = "")
 
-cat("\n=== OPO Summary Statistics ===\n")
 cat("AOOS Rate: median", round(median(opo_summary$aoos_rate, na.rm = TRUE), 1),
     "%, range", round(min(opo_summary$aoos_rate, na.rm = TRUE), 1), "-",
     round(max(opo_summary$aoos_rate, na.rm = TRUE), 1), "%\n")
@@ -143,5 +137,4 @@ cat("EP Rate: median", round(median(opo_summary$ep_rate, na.rm = TRUE), 1),
     "%, range", round(min(opo_summary$ep_rate, na.rm = TRUE), 1), "-",
     round(max(opo_summary$ep_rate, na.rm = TRUE), 1), "%\n")
 
-cat("\n=== Median DSRI by OPO and Group ===\n")
 print(dsri_by_opo, n = 30)

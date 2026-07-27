@@ -1,5 +1,5 @@
-# fig3_response_timing.r — Figure 3: Response timing relative to cross-clamp (4 groups)
-# A/B: CDF by DBD/DCD, C: boxplot, D: % after clamp
+# fig3_response_timing.r: Figure 3. Response timing relative to cross-clamp (4 groups)
+# A/B: cumulative distribution function by DBD/DCD, C: boxplot, D: % after clamp
 
 final_plot_data <- timing_cohort %>%
   filter(!is.na(donation_type), !is.na(seq_flag))
@@ -14,7 +14,6 @@ box_medians <- final_plot_data %>%
     q75 = quantile(diff_final_clamp, 0.75, na.rm = TRUE),
     .groups = "drop"
   )
-cat("\n=== Acceptance Timing Medians ===\n")
 print(box_medians)
 
 make_cumulative_plot <- function(data, donor_type_filter, plot_label) {
@@ -89,7 +88,7 @@ fig3 <- ((p_dbd | p_dcd) / (p_box | p_prop)) / color_key +
   plot_layout(heights = c(1, 1, 0.12))
 
 print(fig3)
-ggsave(here("figures", "main", "Figure3_Response_Timing.png"), fig3, width = 14, height = 12, dpi = 300)
+ggsave(fig_path("figures", "main", "Figure3_Response_Timing.png"), fig3, width = 14, height = 12, dpi = FIG_DPI, compression = "lzw")
 
 # Cumulative table
 time_points <- c(-30, -20, -10, 0, 2, 4, 6, 8, 10, 20)
@@ -111,5 +110,4 @@ cumulative_table <- bind_rows(cum_list) %>%
   arrange(time_point) %>%
   mutate(across(where(is.numeric), ~ sprintf("%.1f%%", .x)))
 
-cat("\n=== Cumulative Acceptance Table ===\n")
 print(knitr::kable(cumulative_table, format = "simple"))

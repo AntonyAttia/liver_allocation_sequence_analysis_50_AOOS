@@ -1,8 +1,8 @@
-# fig5_stratified.r — Figure 5 Stratified by DBD/DCD (AOOS only)
+# sf_opo_center_stratified.r
+# Supplement Figure 7. OPO-center pair analysis stratified by DBD and DCD.
 # Four panels: A (DBD counts), B (DCD counts), C (DBD timing), D (DCD timing)
-# Saves to figures/main/. (Amalgamated Figure 5 remains in fig5_opo_center.r.)
 
-dir.create("figures/main", showWarnings = FALSE, recursive = TRUE)
+dir.create(here("figures", "supplement"), showWarnings = FALSE, recursive = TRUE)
 
 ref_label <- "Median"
 
@@ -131,10 +131,9 @@ stratified_pair_data <- function(data, dtype) {
 dbd_dat <- stratified_pair_data(timing_cohort, "DBD")
 dcd_dat <- stratified_pair_data(timing_cohort, "DCD")
 
-# ---- Summary stats for results (bottom line of Panels C and D) ----
+# Summary stats for results (bottom line of Panels C and D)
 med_dbd <- dbd_dat$timing_wide %>% filter(pair_label_fct == ref_label)
 med_dcd <- dcd_dat$timing_wide %>% filter(pair_label_fct == ref_label)
-cat("\n=== Figure 5 Stratified: Median timing (reference row in Panels C & D) ===\n")
 if (nrow(med_dbd) > 0) {
   aoos_dbd <- med_dbd$AOOS[1]
   seq_dbd  <- med_dbd$Sequential[1]
@@ -149,13 +148,12 @@ if (nrow(med_dcd) > 0) {
 }
 cat("(Reference = median across one-pair-per-center pairs for each donor type.)\n\n")
 
-# ---- Top 10 only: median counts and median timing (for results) ----
+# Top 10 only: median counts and median timing (for results)
 top10_dbd_counts <- dbd_dat$counts_plot %>% filter(pair_label_fct != ref_label) %>% group_by(offer_type) %>% summarise(med = median(n_offers), .groups = "drop")
 top10_dbd_timing <- dbd_dat$timing_wide %>% filter(pair_label_fct != ref_label)
 top10_dcd_counts <- dcd_dat$counts_plot %>% filter(pair_label_fct != ref_label) %>% group_by(offer_type) %>% summarise(med = median(n_offers), .groups = "drop")
 top10_dcd_timing <- dcd_dat$timing_wide %>% filter(pair_label_fct != ref_label)
 
-cat("=== Figure 5 Stratified: Top 10 pairs only (medians) ===\n")
 # DBD
 if (nrow(top10_dbd_counts) > 0) {
   med_aoos_dbd   <- top10_dbd_counts %>% filter(offer_type == "AOOS") %>% pull(med)
@@ -248,7 +246,6 @@ p_dcd_timing <- ggplot(dcd_dat$timing_plot, aes(x = pair_label_fct, y = median_t
   theme(plot.tag = element_text(size = 11, face = "bold", hjust = 0, vjust = 1), plot.tag.position = c(0, 1),
         axis.text.y = element_text(size = 8), legend.position = "right", panel.grid.major.y = element_blank())
 
-# Title rows (match draft5 style)
 title_counts <- ggplot() +
   annotate("text", x = 0.5, y = 0.5, label = "Number of Transplants\n(Top 10 OPO\u2013Center pairs by AOOS rate + median)",
            size = 4, fontface = "bold", hjust = 0.5, vjust = 0.5) +
@@ -259,13 +256,13 @@ title_timing <- ggplot() +
            size = 4, fontface = "bold", hjust = 0.5, vjust = 0.5) +
   xlim(0, 1) + ylim(0, 1) + theme_void() + theme(plot.margin = margin(5, 0, 5, 0))
 
-# Layout: title / (A | B) / title / (C | D)
-fig5_strat <- title_counts /
+# Layout: title, (A, B), title, (C, D)
+sf7_opo_center <- title_counts /
   (p_dbd_counts + p_dcd_counts) /
   title_timing /
   (p_dbd_timing + p_dcd_timing) +
   plot_layout(nrow = 4, heights = c(0.12, 1, 0.12, 1), guides = "collect") &
   theme(plot.margin = margin(5, 5, 5, 5))
 
-print(fig5_strat)
-ggsave(here("figures", "main", "Figure5_Stratified.png"), fig5_strat, width = 14, height = 12, dpi = 300)
+print(sf7_opo_center)
+ggsave(fig_path("figures", "supplement", "S7_OPO_Center_Stratified.png"), sf7_opo_center, width = 14, height = 12, dpi = FIG_DPI, compression = "lzw")

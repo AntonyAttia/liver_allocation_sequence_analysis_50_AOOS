@@ -1,25 +1,7 @@
-# fig6_center_aggr.r — Figure 6: Center Aggressiveness & Distance Differential (5 panels)
-# A: scatter sequential-after-≥10 vs total sequential; B: scatter vs AOOS; C: stacked AOOS by tertile;
-# D: mean AOOS rate by tertile; E: distance difference by OPO (segmented by tertile)
+# sf_center_aggressiveness.r: Supplement Figure 6. Center aggressiveness and distance differential
+# Panels A and B: scatter plots, panels C and D: AOOS by tertile, panel E: distance difference by OPO
 
-dir.create("figures/main", showWarnings = FALSE, recursive = TRUE)
-
-# Center names (optional)
-if (!exists("listing_center_names")) {
-  ctr_unos <- tryCatch(
-    read_csv("~/Desktop/Stanford/Open Offers/center UNOS new.csv", show_col_types = FALSE),
-    error = function(e) NULL
-  )
-  if (!is.null(ctr_unos)) {
-    listing_center_names <- ctr_unos %>%
-      select(LISTING_CTR_CODE, LISTING_CTR) %>%
-      filter(!is.na(LISTING_CTR_CODE)) %>%
-      group_by(LISTING_CTR_CODE) %>%
-      summarise(LISTING_CTR = first(LISTING_CTR), .groups = "drop")
-  } else {
-    listing_center_names <- tibble(LISTING_CTR_CODE = character(), LISTING_CTR = character())
-  }
-}
+dir.create(here("figures", "supplement"), showWarnings = FALSE, recursive = TRUE)
 
 # Sequential offers only (for aggressiveness)
 sequential_offers_aggr <- timing_cohort %>%
@@ -27,8 +9,7 @@ sequential_offers_aggr <- timing_cohort %>%
   mutate(n_rejections_before_acceptance = n_unique_ctr_contacted - 1)
 
 center_summary_aggr <- sequential_offers_aggr %>%
-  left_join(listing_center_names, by = "LISTING_CTR_CODE") %>%
-  group_by(LISTING_CTR_CODE, LISTING_CTR) %>%
+  group_by(LISTING_CTR_CODE) %>%
   summarise(
     n_offers = n(),
     max_rejections = max(n_rejections_before_acceptance, na.rm = TRUE),
@@ -66,7 +47,7 @@ tertile_fill <- c(
   "Low: Rarely Accept After \u226510 Rejections"      = "#24A148"
 )
 
-# ---- Panel A: scatter (sequential after ≥10 vs total sequential) ----
+# Panel A: scatter (sequential after ≥10 vs total sequential)
 p1_scatter <- centers_robust %>%
   ggplot(aes(x = n_after_10_rejections, y = n_offers, fill = category_by_count)) +
   geom_point(alpha = 0.8, stroke = 1, shape = 21, color = "black", size = 4) +
@@ -75,7 +56,7 @@ p1_scatter <- centers_robust %>%
   theme_main(base_size = 11) +
   theme(plot.title = element_text(size = 16, face = "bold", hjust = 0, margin = margin(b = 5)))
 
-# ---- Panel B: scatter (sequential after ≥10 vs AOOS per center) ----
+# Panel B: scatter (sequential after ≥10 vs AOOS per center)
 aoos_by_center <- timing_cohort %>%
   filter(is_aoos, !is.na(LISTING_CTR_CODE)) %>%
   group_by(LISTING_CTR_CODE) %>%
@@ -103,7 +84,6 @@ if (spearman_p < 0.001) {
 cor_text <- paste0("\u03c1 = ", spearman_rho, ", ", p_text)
 x_max <- max(centers_with_aoos$n_after_10_rejections, na.rm = TRUE)
 y_max <- max(centers_with_aoos$n_aoos_accepted, na.rm = TRUE)
-cat("\n=== Spearman (Panel B): in-sequence after \u226510 rejections vs AOOS accepted ===\n")
 cat("Spearman \u03c1:", spearman_rho, "|", p_text, "\n")
 
 p2_scatter <- centers_with_aoos %>%
@@ -124,7 +104,7 @@ p2_scatter <- centers_with_aoos %>%
   theme_main(base_size = 11) +
   theme(plot.title = element_text(size = 16, face = "bold", hjust = 0, margin = margin(b = 5)))
 
-# ---- Panel C: single stacked bar (AOOS volume by tertile) ----
+# Panel C: single stacked bar (AOOS volume by tertile)
 # Canonical order so stack and label positions match (Low = bottom, Medium = middle, High = top)
 panel_c_levels <- c(
   "Low: Rarely Accept After \u226510 Rejections",
@@ -178,7 +158,7 @@ p3_stacked <- aoos_by_count_aggr %>%
         legend.position = "bottom", legend.direction = "horizontal",
         legend.title = element_text(size = 10), legend.text = element_text(size = 9))
 
-# ---- Panel D: median AOOS rate (%) by tertile ----
+# Panel D: median AOOS rate (%) by tertile
 centers_with_transplants <- timing_cohort %>%
   filter(!is.na(LISTING_CTR_CODE)) %>%
   left_join(centers_robust %>% select(LISTING_CTR_CODE, category_by_count), by = "LISTING_CTR_CODE") %>%
@@ -212,7 +192,7 @@ p4_median_rate <- normalized_rates %>%
   theme(plot.title = element_text(size = 16, face = "bold", hjust = 0, margin = margin(b = 5)),
         axis.text.x = element_blank(), axis.ticks.x = element_blank())
 
-# ---- Panel E: distance difference by OPO (segmented by tertile) ----
+# Panel E: distance difference by OPO (segmented by tertile)
 center_acceptance_proportions <- timing_cohort %>%
   mutate(
     OPO_CTR_CODE_current = case_when(
@@ -291,7 +271,7 @@ p5_distance <- stacked_acceptance_data %>%
   theme(plot.title = element_text(size = 16, face = "bold", hjust = 0, margin = margin(b = 5)),
         axis.text.y = element_text(size = 8))
 
-# ---- Layout: (A|B)/(C|D) | E, then legend below ----
+# Layout: (A, B) / (C, D), then E, then legend below
 p3_stacked_noleg <- p3_stacked + theme(legend.position = "none")
 left_grid <- (p1_scatter | p2_scatter) / (p3_stacked_noleg | p4_median_rate) +
   plot_layout(heights = c(1, 1))
@@ -304,81 +284,16 @@ center_legend <- cowplot::get_legend(p3_legend)
 legend_plot <- cowplot::ggdraw(center_legend) + theme(plot.margin = margin(8, 30, 8, 30))
 
 main_figure <- left_grid | p5_distance + plot_layout(widths = c(1.6, 1))
-fig6 <- main_figure / legend_plot + plot_layout(heights = c(1, 0.08))
+sf6_center_aggr <- main_figure / legend_plot + plot_layout(heights = c(1, 0.08))
 
-print(fig6)
-ggsave(here("figures", "main", "Figure6_Center_Aggressiveness.png"), fig6, width = 22, height = 12, dpi = 300)
+print(sf6_center_aggr)
+ggsave(fig_path("figures", "supplement", "S6_Center_Aggressiveness.png"), sf6_center_aggr, width = 22, height = 12, dpi = FIG_DPI, compression = "lzw")
 
 # Printed summary
 tertile_aoos_summary <- centers_with_aoos %>%
   group_by(category_by_count) %>%
   summarise(n_centers = n(), total_aoos = sum(n_aoos_accepted), .groups = "drop")
-cat("\n=== Figure 6: Center Aggressiveness & Distance ===\n")
 cat("AOOS by tertile:\n")
 print(tertile_aoos_summary)
 cat("\nMedian AOOS rate by tertile (%):\n")
 print(normalized_rates %>% select(category_by_count, n_centers, median_aoos_rate))
-
-# ---- Panel E diagnostic: why do 3,282 + 1,690 not sum to full AOOS cohort? ----
-aoos_cohort_n    <- sum(timing_cohort$is_aoos, na.rm = TRUE)
-aoos_na_distance <- timing_cohort %>% filter(is_aoos) %>% summarise(n = sum(is.na(DISTANCE)), .groups = "drop") %>% pull(n)
-aoos_with_dist   <- timing_cohort %>% filter(is_aoos, !is.na(DISTANCE))
-opo_with_both    <- distance_data %>% distinct(OPO_CTR_CODE) %>% pull(OPO_CTR_CODE)
-aoos_opo_current <- aoos_with_dist %>%
-  mutate(OPO_CTR_CODE_current = case_when(
-    OPO_CTR_CODE == "00527" ~ "11036", OPO_CTR_CODE == "05239" ~ "14353",
-    OPO_CTR_CODE == "00093" ~ "19282", TRUE ~ OPO_CTR_CODE
-  ))
-n_aoos_in_opos_with_both   <- sum(aoos_opo_current$OPO_CTR_CODE_current %in% opo_with_both)
-n_aoos_in_opos_missing_both <- nrow(aoos_with_dist) - n_aoos_in_opos_with_both
-n_aoos_in_distance_data    <- sum(distance_data$n_open_offers, na.rm = TRUE)
-n_aoos_in_distance_plot    <- sum(distance_plot_data$n_open_offers, na.rm = TRUE)
-n_panel_e_positive         <- total_n_positive
-n_panel_e_negative         <- total_n_negative
-opos_excluded_abs_diff     <- distance_data %>% filter(abs(distance_diff) > 300)
-n_aoos_excluded_abs_diff   <- sum(opos_excluded_abs_diff$n_open_offers, na.rm = TRUE)
-cat("\n=== Panel E: AOOS count diagnostic ===\n")
-cat(sprintf("Total AOOS in timing cohort: %d\n", aoos_cohort_n))
-cat(sprintf("Panel E text: '3,282 (66%%)' + '1,690 (34%%)' = %d (shown in figure)\n", n_panel_e_positive + n_panel_e_negative))
-cat(sprintf("Difference (AOOS not in Panel E totals): %d\n", aoos_cohort_n - (n_panel_e_positive + n_panel_e_negative)))
-cat(sprintf("  AOOS with NA DISTANCE (excluded before OPO aggregation): %d\n", aoos_na_distance))
-cat(sprintf("  AOOS in OPOs that lack both in-seq and AOOS medians (OPO dropped from distance_data): %d\n", n_aoos_in_opos_missing_both))
-cat(sprintf("  AOOS in OPOs with both medians (distance_data): %d\n", n_aoos_in_distance_data))
-cat(sprintf("  AOOS in OPOs with |distance_diff| <= 300 (distance_plot_data, counted in panel E): %d\n", n_aoos_in_distance_plot))
-cat(sprintf("  AOOS in OPOs with |distance_diff| > 300 (excluded from plot and from panel E n totals): %d\n", n_aoos_excluded_abs_diff))
-cat(sprintf("  Check: distance_plot_data sum = %d; total_n_positive + total_n_negative = %d\n",
-            n_aoos_in_distance_plot, n_panel_e_positive + n_panel_e_negative))
-
-# ---- Panel E: interrogate distance_diff (especially zero / near-zero) ----
-# Full table of all OPOs with key numbers (for paste-inspection)
-distance_summary <- distance_data %>%
-  select(OPO_CTR_CODE, OPO_short, n_AOOS = n_open_offers, n_Sequential, median_distance_AOOS, median_distance_Sequential, distance_diff) %>%
-  mutate(
-    diff_positive = distance_diff > 0,
-    diff_negative = distance_diff < 0,
-    diff_zero     = (distance_diff == 0 | (abs(distance_diff) < 0.01))  # exact 0 or floating-point near zero
-  )
-cat("\n=== Panel E: All OPOs — distance_data (key columns) ===\n")
-print(distance_summary, n=Inf)
-
-# OPOs with distance_diff zero or near-zero: full detail
-opos_zero_diff <- distance_summary %>% filter(diff_zero)
-cat("\n=== OPOs where distance_diff is 0 (or <0.01 nm): how can median diff be zero? ===\n")
-cat(sprintf("Number of such OPOs: %d; total AOOS in those OPOs: %d\n",
-            nrow(opos_zero_diff), sum(opos_zero_diff$n_AOOS, na.rm = TRUE)))
-if (nrow(opos_zero_diff) > 0) {
-  cat("Detail (each row = one OPO):\n")
-  print(opos_zero_diff)
-}
-
-# Summary counts by sign (using same logic as plot: >0, <0, ==0)
-n_full_positive <- sum(distance_data$n_open_offers[distance_data$distance_diff > 0], na.rm = TRUE)
-n_full_negative <- sum(distance_data$n_open_offers[distance_data$distance_diff < 0], na.rm = TRUE)
-n_full_zero     <- sum(distance_data$n_open_offers[distance_data$distance_diff == 0], na.rm = TRUE)
-n_near_zero     <- sum(distance_data$n_open_offers[abs(distance_data$distance_diff) < 0.01 & distance_data$distance_diff != 0], na.rm = TRUE)
-cat("\n=== Full distance_data totals by sign (all OPOs, no 300 cap) ===\n")
-cat(sprintf("diff > 0 (in-sequence farther): n_AOOS = %d\n", n_full_positive))
-cat(sprintf("diff < 0 (AOOS farther):        n_AOOS = %d\n", n_full_negative))
-cat(sprintf("diff == 0 exactly:             n_AOOS = %d\n", n_full_zero))
-cat(sprintf("(OPOs with 0 < |diff| < 0.01 nm, for curiosity: n_AOOS = %d)\n", n_near_zero))
-cat(sprintf("Sum (should be 5486): %d\n", n_full_positive + n_full_negative + n_full_zero))

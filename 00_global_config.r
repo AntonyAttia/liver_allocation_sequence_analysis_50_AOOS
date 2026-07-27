@@ -1,19 +1,44 @@
 # 00_global_config.r
-# Global theme, colour scheme, anonymisation, timing cohort, and helper functions
-# Loaded once by the main Rmd; all chunks depend on objects created here.
+# Shared theme, colours, anonymisation, timing cohort, and helpers.
+# Sourced once by the main Rmd; figure scripts depend on objects created here.
 
-# ============================================================
-# 4-GROUP COLOUR PALETTE (colorblind-friendly)
-# ============================================================
+# Figure export (publication TIFF)
+FIG_EXT <- ".tiff"
+FIG_DPI <- 300L
+
+# Build a here() path and force the publication TIFF extension.
+fig_path <- function(...) {
+  args <- list(...)
+  n <- length(args)
+  args[[n]] <- paste0(tools::file_path_sans_ext(as.character(args[[n]])), FIG_EXT)
+  do.call(here::here, args)
+}
+
+# Convert a PNG file to TIFF (used after webshot / rsvg / gtsave).
+png_file_to_tiff <- function(path_png, path_tiff) {
+  if (!requireNamespace("png", quietly = TRUE) || !requireNamespace("tiff", quietly = TRUE)) {
+    stop("Install packages 'png' and 'tiff' for PNG to TIFF conversion (tables, cohort flow).")
+  }
+  arr <- png::readPNG(path_png, native = FALSE)
+  tiff::writeTIFF(arr, path_tiff, compression = "LZW")
+}
+
+# webshot2 captures to PNG; convert to TIFF for journal submission.
+webshot_to_tiff <- function(url, path_tiff, ...) {
+  tmp <- tempfile(fileext = ".png")
+  on.exit(unlink(tmp), add = TRUE)
+  webshot2::webshot(url = url, file = tmp, ...)
+  png_file_to_tiff(tmp, path_tiff)
+}
+
+# Colour palette (4 groups)
 SEQ_COLORS_4 <- c(
-
   "<50 sequence"           = "#0066CC",
   "\u226550 sequence"      = "#00468B",
   "AOOS (out-of-sequence)" = "#FF8C00",
   "EP (Policy 9.10)"       = "#8A3FFC"
 )
 
-# 2-group sequential vs AOOS (for figures that only use AOOS, not EP)
 GLOBAL_SEQUENTIAL_COLOR <- "#00468B"
 GLOBAL_AOOS_COLOR       <- "#FF8C00"
 GLOBAL_EP_COLOR         <- "#8A3FFC"
@@ -26,9 +51,7 @@ GLOBAL_SEQUENCE_COLORS <- c(
 
 EP_POLICY_DATE <- as.Date("2021-03-25")
 
-# ============================================================
-# THEME
-# ============================================================
+# Plot theme
 theme_main <- function(base_size = 12) {
   theme_minimal(base_family = "Helvetica", base_size = base_size) +
     theme(
@@ -58,9 +81,7 @@ format_pvalue <- function(p) {
   paste0("P = ", sub("^0\\.", ".", sprintf("%.3f", p)))
 }
 
-# ============================================================
-# ANONYMISE OPO AND CENTER CODES
-# ============================================================
+# Anonymise OPO and center codes
 set.seed(42)
 
 all_opo_codes <- final_cohort %>%
@@ -108,9 +129,7 @@ anonymize_center <- function(code) {
 anonymize_opo_vec    <- Vectorize(anonymize_opo)
 anonymize_center_vec <- Vectorize(anonymize_center)
 
-# ============================================================
-# TIMING COHORT (plausible timing subset; used for most figures)
-# ============================================================
+# Timing cohort (plausible timing subset used for most figures)
 n_before_timing <- nrow(final_cohort)
 
 timing_cohort_temp <- final_cohort %>%
@@ -139,7 +158,6 @@ cat("Timing cohort: ", comma(nrow(timing_cohort)),
     " (from ", comma(n_before_timing), ")\n", sep = "")
 print(table(timing_cohort$seq_flag))
 
-# donation_type (used everywhere)
 timing_cohort <- timing_cohort %>%
   mutate(
     donation_type = case_when(
@@ -168,7 +186,7 @@ timing_cohort <- timing_cohort %>%
     ) %>% factor(levels = c("Yes", "No"))
   )
 
-# OPO direct mapping (for maps)
+# OPO codes for maps
 opo_direct_mapping <- data.frame(
   OPO_CTR_CODE = c(
     "11346","14167","15376","20243","24986","07657","04433","03720","00527","05239",

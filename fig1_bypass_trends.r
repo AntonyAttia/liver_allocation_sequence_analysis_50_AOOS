@@ -1,4 +1,4 @@
-# fig1_bypass_trends.r — Figure 1: Bypass code usage over time (full PTR)
+# fig1_bypass_trends.r: Figure 1. Bypass code usage over time (full PTR)
 
 library(lubridate)
 
@@ -36,9 +36,7 @@ text_coded <- text_rows %>%
 all_coded_raw <- bind_rows(bypass_coded, text_coded) %>%
   distinct(DONOR_ID, MATCH_ID_CODE, code, month)
 
-# ------------------------------------------------------------
 # Legend labels, ordering, and palette (exclude zero-count codes)
-# ------------------------------------------------------------
 expected_codes <- c("887", "861", "862", "863", "799", "888", "798", "898")
 
 code_totals <- all_coded_raw %>%
@@ -149,12 +147,11 @@ timeline_3line <- timeline_3line %>%
   mutate(series = factor(series, levels = c("EP", "OPTN AOOS", "Lit")))
 fig1_series_colors <- c("EP" = "#D62728", "OPTN AOOS" = "#1F77B4", "Lit" = "#FF7F0E")
 
-# ---- Printed output for results ----
+# Printed output for results
 monthly_wide <- all_coded %>%
   count(month, code, name = "n_match_runs") %>%
   arrange(month, code) %>%
   tidyr::pivot_wider(names_from = code, values_from = n_match_runs, values_fill = 0)
-cat("\n=== Figure 1: Match runs per month by bypass code (wide) ===\n")
 print(monthly_wide, n = Inf)
 
 all_time_by_code <- all_coded %>%
@@ -165,7 +162,6 @@ distinct_runs_all <- all_coded_raw %>%
   filter(code %in% names(code_labels_real)) %>%
   distinct(DONOR_ID, MATCH_ID_CODE, month) %>%
   nrow()
-cat("\n=== Figure 1: All-time totals and proportions (all months) ===\n")
 cat("Distinct match runs (any of these codes) over all time: ", distinct_runs_all, "\n", sep = "")
 cat("Total code occurrences (match run × code): ", total_code_occurrences, "\n", sep = "")
 print(all_time_by_code %>% mutate(label = unname(code_labels_real[code])) %>% select(code, label, total, prop_pct), n = Inf)
@@ -180,7 +176,6 @@ distinct_runs_post <- all_coded_raw %>%
   filter(code %in% names(code_labels_real), month >= ep_policy_month) %>%
   distinct(DONOR_ID, MATCH_ID_CODE, month) %>%
   nrow()
-cat("\n=== Figure 1: After EP policy (month >= ", format(ep_policy_month, "%Y-%m"), ") totals and proportions ===\n", sep = "")
 cat("Distinct match runs (any of these codes) after policy: ", distinct_runs_post, "\n", sep = "")
 cat("Total code occurrences after policy: ", total_post, "\n", sep = "")
 print(post_by_code %>% mutate(label = unname(code_labels_real[code])) %>% select(code, label, total, prop_pct), n = Inf)
@@ -244,9 +239,9 @@ p_fig1 <- timeline_3line %>%
   )
 
 print(p_fig1)
-dir.create("figures/main", showWarnings = FALSE, recursive = TRUE)
-dir.create("figures/supplement", showWarnings = FALSE, recursive = TRUE)
-ggsave(here("figures", "main", "Figure1_Bypass_Trends.png"), p_fig1, width = 14, height = 8, dpi = 300)
+dir.create(here("figures", "main"), showWarnings = FALSE, recursive = TRUE)
+dir.create(here("figures", "supplement"), showWarnings = FALSE, recursive = TRUE)
+ggsave(fig_path("figures", "main", "Figure1_Bypass_Trends.png"), p_fig1, width = 14, height = 8, dpi = FIG_DPI, compression = "lzw")
 
 # Definition text for figure caption and supplement (OPTN vs Lit)
 fig1_definitions_text <- paste(
@@ -258,16 +253,16 @@ fig1_definitions_text <- paste(
 
 # Supplemental Table S1: bypass/refusal code summary (all-time and after EP policy only)
 # Row order: summary rows, then EP (887), then all OPTN (861, 862, 863, 799), then all Lit (798, 898, 888)
-sf1_code_order <- c("887", "861", "862", "863", "799", "798", "898", "888")
-sf1_bypass_summary <- all_time_by_code %>%
+tab_s1_code_order <- c("887", "861", "862", "863", "799", "798", "898", "888")
+tab_s1_bypass_summary <- all_time_by_code %>%
   mutate(label = unname(code_labels_real[code])) %>%
   left_join(post_by_code %>% select(code, total_post = total, prop_pct_post = prop_pct), by = "code") %>%
   select(code, label, total_all = total, prop_pct_all = prop_pct, total_post, prop_pct_post) %>%
-  filter(code %in% sf1_code_order) %>%
-  arrange(match(code, sf1_code_order)) %>%
+  filter(code %in% tab_s1_code_order) %>%
+  arrange(match(code, tab_s1_code_order)) %>%
   select(-code)
 
-sf1_summary_rows <- tibble(
+tab_s1_summary_rows <- tibble(
   label = c("Distinct match runs (any code)", "Total code occurrences (match run × code)"),
   total_all = c(distinct_runs_all, total_code_occurrences),
   prop_pct_all = c(NA_real_, NA_real_),
@@ -275,9 +270,9 @@ sf1_summary_rows <- tibble(
   prop_pct_post = c(NA_real_, NA_real_)
 )
 
-sf1_table_df <- bind_rows(sf1_summary_rows, sf1_bypass_summary)
+tab_s1_table_df <- bind_rows(tab_s1_summary_rows, tab_s1_bypass_summary)
 
-sf1_gt <- sf1_table_df %>%
+tab_s1_gt <- tab_s1_table_df %>%
   gt::gt() %>%
   gt::tab_header(
     title = "Supplemental Table S1. Bypass/refusal code summary",
@@ -294,19 +289,19 @@ sf1_gt <- sf1_table_df %>%
   ) %>%
   gt::fmt_number(columns = c(total_all, total_post), decimals = 0) %>%
   gt::fmt_number(columns = c(prop_pct_all, prop_pct_post), decimals = 1) %>%
-  gt::sub_missing(columns = c(prop_pct_all, prop_pct_post), missing_text = "—") %>%
+  gt::sub_missing(columns = c(prop_pct_all, prop_pct_post), missing_text = "-") %>%
   gt::tab_style(style = gt::cell_text(weight = "bold"), locations = gt::cells_body(rows = 1:2, columns = 1)) %>%
   gt::tab_options(table.font.names = "Helvetica", table.font.size = 14) %>%
   gt::tab_source_note(
     gt::md("**Definitions:** EP = code 887. OPTN AOOS = OPTN-defined codes 861, 862, 863, 799. Lit = literature-based 798, 898, 888. **+ text:** codes 798, 799, 898 require matching refusal/offer text for keywords: \"expedited\", \"open offer\", \"aggressive\".")
   )
-sf1_html <- tempfile(fileext = ".html")
-gt::gtsave(sf1_gt, sf1_html)
+tab_s1_html <- tempfile(fileext = ".html")
+gt::gtsave(tab_s1_gt, tab_s1_html)
 tryCatch({
-  webshot2::webshot(
-    url = paste0("file://", normalizePath(sf1_html)),
-    file = here("figures", "supplement", "TableS1_Bypass_Summary.png"),
+  webshot_to_tiff(
+    url = paste0("file://", normalizePath(tab_s1_html)),
+    path_tiff = fig_path("figures", "supplement", "TableS1_Bypass_Summary.png"),
     vwidth = 1600, vheight = 900, delay = 2, zoom = 2
   )
 }, error = function(e) cat("webshot Table S1 failed:", e$message, "\n"))
-readr::write_csv(sf1_table_df, here("figures", "supplement", "TableS1_Bypass_Summary.csv"))
+readr::write_csv(tab_s1_table_df, here("figures", "supplement", "TableS1_Bypass_Summary.csv"))

@@ -1,33 +1,37 @@
-## Liver allocation sequence analysis (AOOS) - scripts_v2
+# AOOS analysis pipeline
 
-This folder contains the v2 data pipeline and the scripts used to generate the main manuscript figures and supplement (see `aoos_draft7.Rmd`).
+R scripts used to prepare the analysis cohort and generate the manuscript
+figures and tables. OPTN data are not included.
 
-### Pipeline (data prep)
-- `00_global_config.r`: Global theme/colour scheme, anonymisation helpers, timing-cohort subset, and shared plotting utilities (sourced by the Rmd).
-- `01_read_data_v2.r`: Loads raw OPTN STAR datasets (PTR, liver transplants, deceased donors, lab panels), reduces to required columns, and saves `01_raw_data_v2.rda` (study period starts at EP implementation, `2021-03-25`).
-- `02_build_cohort_v2.r`: Applies exclusion criteria and builds the final cohort with 4 allocation groups: `<50`, `>=50`, `AOOS` (not EP), and `EP` (policy 9.10; code `887`). Saves `02_cohort_built_v2.rda`.
-- `03_calculate_variables_v2.r`: Calculates derived variables (e.g., DRI/DSRI, MELD variants, timing/refusal measures, discarded-donor dataset, and machine-perfusion definitions) and saves `03_cohort_with_variables_v2.rda`.
+## 1. Build the processed data
 
-### Manuscript build
-- `aoos_draft7.Rmd`: Knits the paper + supplement; sources `table1.r`, all `fig*.r` scripts, and all `sf*.r` scripts and writes outputs to `figures/main` and `figures/supplement`.
+Put these raw OPTN SAS files in `data_raw/`:
 
-### Main figures and tables
-- `table1.r`: Table 1 baseline characteristics (and supporting supplemental tables S2/S3 slices).
-- `fig1_bypass_trends.r`: Figure 1 bypass code usage over time.
-- `fig2_refusal_timing.r`: Figure 2 refusal patterns and placement timing.
-- `fig3_response_timing.r`: Figure 3 response timing relative to cross-clamp.
-- `fig4_choropleth.r`: Figure 4 geographic distribution (AOOS rate and EP rate).
-- `fig5_opo_center.r`: Figure 5 OPO-center pair analysis (AOOS only).
-- `fig5_stratified.r`: Figure 5 stratified analysis (AOOS).
-- `fig6_center_aggr.r`: Figure 6 center aggressiveness (AOOS).
+- `ptr_li.sas7bdat`
+- `liver_data.sas7bdat`
+- `deceased_donor_data.sas7bdat`
+- `labpanels.sas7bdat`
 
-### Supplemental figures
-- `sf1_cohort_flow.r`: Supplemental cohort flow.
-- `sf2_survival.r`: Supplemental survival analysis.
-- `sf_dri_dsri.r`: Supplemental DRI/DSRI analyses.
-- `sf_ep_validation.r`: Supplemental EP (policy 9.10) validation.
-- `sf_machine_perfusion.r`: Supplemental machine perfusion analyses.
-- `sf_utilisation.r`: Supplemental utilisation analyses.
+Then run these scripts in order:
 
-### Citation
-- `CITATION.cff`: Citation file for this analysis.
+1. `01_read_data.r`
+2. `02_build_cohort.r`
+3. `03_calculate_variables.r`
+
+They write the analysis datasets into `data_processed/` (this folder is not
+in the repository; you create it by running the scripts above).
+
+## 2. Generate figures and tables
+
+Once `data_processed/` exists, open `generate_figures_tables.Rmd` in RStudio
+and knit it. TIFF outputs go to `figures/main/` and `figures/supplement/`.
+
+## Main
+
+- Table 1: `table1.r`
+- Figures 1-4: `fig1_bypass_trends.r`, `fig2_refusal_timing.r`, `fig3_response_timing.r`, `fig4_choropleth.r`
+
+## Supplement
+
+- Tables S1-S3: `fig1_bypass_trends.r` (S1), `table1.r` (S2-S3)
+- Figures S1-S8: `sf_cohort_flow.r`, Figma schematic (S2), `sf_aoos_recovery.r`, `sf_donor_placement_distributions.r`, `sf_survival.r`, `sf_center_aggressiveness.r`, `sf_opo_center_stratified.r`, `sf_utilisation.r`

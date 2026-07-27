@@ -1,21 +1,19 @@
-# 03_calculate_variables_v2.r
+# 03_calculate_variables.r
 # Calculate derived variables (DRI, DSRI, MELD, timing, refusals, discarded)
-# v2: 4-group classification — <50, ≥50, AOOS (not EP), EP (Policy 9.10)
+# Four-group classification: <50, ≥50, AOOS (not EP), EP (Policy 9.10)
 
 library(tidyverse)
 library(lubridate)
+library(here)
 
-# Same path as in 01_read_data_v2.r
-DATA_DIR <- "/Users/antonyattia/Desktop/Stanford/Open Offers/Manuscript/liver_allocation_sequence_analysis_50_AOOS/data_processed"
+DATA_DIR <- here("data_processed")
 
 load(file.path(DATA_DIR, "02_cohort_built_v2.rda"))
 load(file.path(DATA_DIR, "01_raw_data_v2.rda"))
 
 cat("Input cohort size:", nrow(final_cohort), "\n\n")
 
-# ============================================================
-# 1. CENTERS CONTACTED
-# ============================================================
+# Centers contacted
 centres_per_run <- ptr_reduced %>%
   inner_join(final_cohort %>% select(DONOR_ID, MATCH_ID_CODE, PTR_SEQUENCE_NUM_tx),
              by = c("DONOR_ID", "MATCH_ID_CODE")) %>%
@@ -33,9 +31,7 @@ final_cohort <- final_cohort %>%
   left_join(centres_per_run, by = c("DONOR_ID", "MATCH_ID_CODE")) %>%
   mutate(n_unique_ctr_contacted = coalesce(n_unique_ctr_contacted, 1L))
 
-# ============================================================
-# 2. STANDARDIZE VARIABLE TYPES
-# ============================================================
+# Standardize variable types
 final_cohort <- final_cohort %>%
   mutate(
     ORGAN_PLACED_uc = toupper(trimws(as.character(ORGAN_PLACED))),
@@ -63,9 +59,7 @@ final_cohort <- final_cohort %>%
     GENDER_DON_donor   = toupper(trimws(as.character(GENDER_DON_donor)))
   )
 
-# ============================================================
-# 3. DRI (DONOR RISK INDEX)
-# ============================================================
+# DRI (donor risk index)
 final_cohort <- final_cohort %>%
   mutate(
     age_don    = AGE_DON_donor,
@@ -102,9 +96,7 @@ final_cohort <- final_cohort %>%
     DRI = exp(DRI_base)
   )
 
-# ============================================================
-# 4. DSRI (DISCARD RISK INDEX)
-# ============================================================
+# DSRI (discard risk index)
 .is_yes <- function(x) toupper(trimws(as.character(x))) %in% c("Y","YES","1","TRUE")
 .is_pos <- function(x) toupper(trimws(as.character(x))) %in% c("P","POS","POSITIVE","1","Y","YES","TRUE")
 .is_fem <- function(x) toupper(trimws(as.character(x))) %in% c("F","FEMALE")
@@ -157,9 +149,7 @@ final_cohort <- final_cohort %>%
     DSRI = exp(DSRI_base)
   )
 
-# ============================================================
-# 5. BSA RATIO
-# ============================================================
+# BSA ratio
 calc_BSA <- function(weight_kg, height_cm) {
   sqrt((as.numeric(weight_kg) * as.numeric(height_cm)) / 3600)
 }
@@ -177,9 +167,7 @@ final_cohort <- final_cohort %>%
     WAIT_DAYS = as.numeric(DAYSWAIT_CHRON)
   )
 
-# ============================================================
-# 6. ADJUSTED MELD SCORES
-# ============================================================
+# Adjusted MELD scores
 cat("Calculating adjusted MELD scores...\n")
 
 final_cohort <- final_cohort %>%
@@ -211,9 +199,7 @@ final_cohort <- final_cohort %>%
     )
   )
 
-# ============================================================
-# 7. CLAMP TIMING
-# ============================================================
+# Clamp timing
 final_cohort <- final_cohort %>%
   mutate(
     CLAMP_DT = ymd_hms(paste(CLAMP_DATE, CLAMP_TIME), tz = "UTC", quiet = TRUE),
@@ -221,9 +207,7 @@ final_cohort <- final_cohort %>%
     diff_final_clamp   = as.numeric(difftime(FINAL_RESPONSE_DT_tx, CLAMP_DT, units = "hours"))
   )
 
-# ============================================================
-# 8. RESPONSE TIMING FROM EARLIEST INITIAL RESPONSE
-# ============================================================
+# Response timing from earliest initial response
 run_start <- ptr_reduced %>%
   filter(!is.na(DONOR_ID), !is.na(MATCH_ID_CODE)) %>%
   group_by(DONOR_ID, MATCH_ID_CODE) %>%
@@ -251,9 +235,7 @@ final_cohort <- final_cohort %>%
     )
   )
 
-# ============================================================
-# 9. CATEGORICAL VARIABLES
-# ============================================================
+# Categorical variables
 final_cohort <- final_cohort %>%
   mutate(
     donation_type = case_when(
@@ -290,9 +272,7 @@ final_cohort <- final_cohort %>%
     ))
   )
 
-# ============================================================
-# 10. REFUSAL STATISTICS
-# ============================================================
+# Refusal statistics
 EP_BYPASS_CODE     <- 887L
 AOOS_BYPASS_CODES  <- c(861L, 862L, 863L, 888L)
 AOOS_TEXT_CODES    <- c(798L, 799L, 898L)
@@ -376,9 +356,7 @@ donor_run_refusal_stats <- multi_refusal_groups %>%
 
 cat("Donor-runs with refusal statistics:", nrow(donor_run_refusal_stats), "\n")
 
-# ============================================================
-# 11. MAX LAB VALUES
-# ============================================================
+# Max lab values
 final_cohort_donors <- final_cohort %>% distinct(DONOR_ID)
 
 labpanels_max <- labpanels %>%
@@ -403,9 +381,7 @@ cat("- Donors with max_SGOT:", sum(!is.na(final_cohort$max_SGOT)), "\n")
 cat("- Donors with max_SGPT:", sum(!is.na(final_cohort$max_SGPT)), "\n")
 cat("- Donors with max_BILIRUBIN:", sum(!is.na(final_cohort$max_BILIRUBIN)), "\n\n")
 
-# ============================================================
-# 12. DISCARDED DATASET (4-group)
-# ============================================================
+# Discarded dataset (4-group)
 ptr_filtered <- ptr_reduced %>%
   filter(!is.na(MATCH_DATE), as.Date(MATCH_DATE) >= date_lb)
 
@@ -487,9 +463,7 @@ cat("  AOOS:", sum(discarded_complete$allocation_type == "AOOS (out-of-sequence)
 cat("  EP:", sum(discarded_complete$allocation_type == "EP (Policy 9.10)", na.rm = TRUE), "\n")
 cat("  Sequential:", sum(discarded_complete$allocation_type == "Sequential", na.rm = TRUE), "\n\n")
 
-# ============================================================
-# SAVE
-# ============================================================
+# Save
 save(final_cohort, donor_run_refusal_stats, discarded_complete,
      file = file.path(DATA_DIR, "03_cohort_with_variables_v2.rda"))
 
