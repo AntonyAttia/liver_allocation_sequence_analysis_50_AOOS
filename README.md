@@ -21,6 +21,8 @@ Then run these scripts in order:
 They write the analysis datasets into `data_processed/` (this folder is not
 in the repository; you create it by running the scripts above).
 
+Figure 4 also needs an OPO mapping file (not included).
+
 ## 2. Generate figures and tables
 
 Once `data_processed/` exists, open `generate_figures_tables.Rmd` in RStudio

@@ -186,25 +186,8 @@ timing_cohort <- timing_cohort %>%
     ) %>% factor(levels = c("Yes", "No"))
   )
 
-# OPO codes for maps
-opo_direct_mapping <- data.frame(
-  OPO_CTR_CODE = c(
-    "11346","14167","15376","20243","24986","07657","04433","03720","00527","05239",
-    "20429","07006","05952","20491","04743","08897","06696","23002","18879","19282",
-    "24149","11036","14353","09331","01519","11811","10447","12617","08773","14911",
-    "02821","22847","08866","15655","15903","22661","14012","17639","03782","25389",
-    "07843","00093","01209","05611","01054","03441","01116","23870","12865","00217",
-    "03348","11377","21979","19809","02139","24614","25581","25172"
-  ),
-  OPO_PROVIDER_NUM = c(
-    "REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED",
-    "REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED",
-    "REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED",
-    "REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED",
-    "REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED",
-    "REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED","REDACTED"
-  ),
-  stringsAsFactors = FALSE
-)
+# OPO codes for maps (mapping file not included)
+opo_mapping_file <- Sys.getenv("AOOS_OPO_MAPPING_FILE")
+opo_direct_mapping <- if (nzchar(opo_mapping_file)) read.csv(opo_mapping_file, colClasses = "character") else NULL
 
 cat("Global config loaded.\n")

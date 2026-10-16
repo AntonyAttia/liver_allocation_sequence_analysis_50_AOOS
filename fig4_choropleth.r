@@ -1,6 +1,8 @@
 # fig4_choropleth.r: Figure 4. Choropleth maps
 # Panel A: AOOS rate by OPO, Panel B: EP rate by OPO
 
+if (is.null(opo_direct_mapping)) stop("OPO mapping file required.")
+
 # Fetch OPO service area polygons
 base_url <- "https://gisportal.hrsa.gov/server/rest/services/Organs/OrganProcurementAndTransplantation_FS/MapServer/3/query"
 url <- paste0(base_url, "?where=1=1&outFields=OPO_PROVIDER_NUM,OPO_PROVIDER_NM,OPO_STATE_ABBR&outSR=4326&f=geojson")
